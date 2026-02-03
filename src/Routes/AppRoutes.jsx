@@ -5,10 +5,13 @@ import Dashboard from "../components/Dashboard";
 import Farmerdata from "../pages/Farmerdata";
 import Landparceldata from "../pages/Landparceldata";
 import ProtectedRoute from "../Auth/ProtectedRoute";
+import Help from "../pages/Help";
 
 const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<Dashboard />} />
+    <Route path="/Help" element={<Help />} />
+
 
     {/* Protected Routes */}
     <Route element={<ProtectedRoute />}>
