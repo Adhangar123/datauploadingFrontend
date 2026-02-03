@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import "../Style/Login.css";
+import "../style/Login.css";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login({ onClose, onLoginSuccess }) {
