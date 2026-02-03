@@ -3,7 +3,7 @@
   background: linear-gradient(
     180deg,
     var(--card-bg),
-    rgba(255, 255, 255, 0.02)
+    rgba(56, 4, 4, 0.02)
   );
   border: 1px solid var(--border);
   border-radius: 16px;
