@@ -7,7 +7,7 @@ const Help = () => {
       <h2>📄 Help & Instructions</h2>
 
       <section className="help-section">
-        <h3>1️⃣ Supported File Types</h3>
+        <h3>1️⃣ Supported File </h3>
         <p>
           You can upload files in <strong>CSV</strong> or <strong>KML</strong> format.
         </p>
