@@ -182,7 +182,7 @@ const FarmerDataUpload = () => {
     setMessage("Uploading to database...");
 
     try {
-      const res = await fetch("http://localhost:5000/api/farmerdata", {
+      const res = await fetch("https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsedData),

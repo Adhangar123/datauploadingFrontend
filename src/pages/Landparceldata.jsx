@@ -181,7 +181,7 @@ const Landparceldata = () => {
 
     setUploading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/land-parcel/upload", {
+      const res = await fetch("https://datauploadingbackend-13977221722.asia-south2.run.app/api/land-parcel/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsedData),
