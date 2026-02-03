@@ -1,0 +1,122 @@
+/* ================= LAYOUT ================= */
+.dashboard-wrapper {
+  width: 100%;
+  padding: 40px;
+  height: 100%;
+  background: linear-gradient(135deg, #e0f2fe, #fefce8);
+  font-family: "Inter", Arial, sans-serif;
+}
+
+/* MAIN CONTENT */
+.dashboard-content {
+  flex: 1; /* PUSH FOOTER TO BOTTOM */
+  padding-top: 50px;
+
+}
+
+/* ================= HEADER ================= */
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.dashboard-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.dashboard-header p {
+  margin-top: 8px;
+  color: #475569;
+  font-size: 15px;
+}
+
+/* ================= CARDS LAYOUT ================= */
+.dashboard-cards {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+/* ================= CARD BASE ================= */
+.dashboard-card {
+  width: 340px;
+  padding: 35px 30px;
+  border-radius: 18px;
+  cursor: pointer;
+  color: #ffffff;
+  text-align: center;
+
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
+}
+
+/* ================= ICON ================= */
+.card-icon {
+  font-size: 42px;
+  margin-bottom: 15px;
+}
+
+/* ================= TITLES ================= */
+.dashboard-card h2 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+
+/* ================= TEXT ================= */
+.dashboard-card p {
+  font-size: 14.5px;
+  opacity: 0.95;
+  line-height: 1.5;
+}
+
+/* ================= CARD COLORS ================= */
+.dashboard-card.farmer {
+  background: linear-gradient(135deg, #22c55e, #15803d);
+}
+
+.dashboard-card.land {
+  background: linear-gradient(135deg, #3b82f6, #1e40af);
+}
+
+/* ================= MODULE CONTAINER ================= */
+.module-container {
+  margin-top: 20px;
+}
+
+/* ================= BACK BUTTON ================= */
+.back-btn {
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 25px;
+  font-size: 14px;
+  box-shadow: 0 6px 15px rgba(99, 102, 241, 0.4);
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  background: linear-gradient(135deg, #4338ca, #312e81);
+}
+
+/* ================= MOBILE ================= */
+@media (max-width: 768px) {
+  .dashboard-cards {
+    gap: 25px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 26px;
+  }
+}

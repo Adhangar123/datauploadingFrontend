@@ -1,0 +1,33 @@
+.help-container {
+  padding: 20px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.help-container h2 {
+  margin-bottom: 15px;
+  color: var(--primary);
+}
+
+.help-section {
+  margin-bottom: 15px;
+}
+
+.help-section h3 {
+  margin-bottom: 5px;
+  color: var(--text-dark);
+}
+
+.help-section p,
+.help-section ul,
+.help-section ol {
+  margin: 0 0 10px 0;
+  color: var(--text-muted);
+}
+
+.help-section ul li,
+.help-section ol li {
+  margin-bottom: 5px;
+}

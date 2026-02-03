@@ -1,0 +1,39 @@
+/* ================= RESET ================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ================= ROOT HEIGHT ================= */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  font-family: "Inter", Arial, sans-serif;
+}
+
+/* ================= APP LAYOUT ================= */
+.app-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ================= PAGE CONTENT ================= */
+.page-content {
+  flex: 1; /* footer ko bottom push karega */
+}
+
+/* ================= GLOBAL LINKS ================= */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ================= SCROLL ================= */
+body {
+  background-color: #f8fafc;
+  overflow-x: hidden;
+}

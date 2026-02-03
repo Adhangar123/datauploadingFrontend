@@ -1,0 +1,195 @@
+/* =========================
+   OVERLAY
+========================= */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: fadeInOverlay 0.4s ease;
+}
+
+/* =========================
+   CARD
+========================= */
+.login-card {
+  width: 380px;
+  background: #ffffff;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  transform: translateY(20px);
+  animation: cardEntrance 0.5s forwards;
+}
+
+/* =========================
+   HEADER
+========================= */
+.login-header {
+  position: relative;
+  height: 140px;
+  background: linear-gradient(135deg, #6fbf73, #4e9b57);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* Logo */
+.login-header img {
+  width: 80px;
+  z-index: 2;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Soft wave */
+.login-header::before {
+  content: "";
+  position: absolute;
+  top: -50px;
+  left: -10%;
+  width: 120%;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 0 0 60% 60%;
+  animation: waveMove 6s infinite linear;
+}
+
+.login-header::after {
+  content: "";
+  position: absolute;
+  bottom: -50px;
+  left: -10%;
+  width: 120%;
+  height: 100px;
+  background: #ffffff;
+  border-radius: 60% 60% 0 0;
+}
+
+/* =========================
+   TEXT
+========================= */
+.login-card h2 {
+  margin: 16px 0 6px;
+  font-size: 24px;
+  color: #2e2e2e;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 18px;
+}
+
+/* =========================
+   INPUTS
+========================= */
+.input-wrapper {
+  position: relative;
+  margin: 12px 24px;
+}
+
+.input-wrapper input {
+  width: 100%;
+  padding: 12px 45px 12px 15px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.input-wrapper input:focus {
+  outline: none;
+  border-color: #4e9b57;
+  box-shadow: 0 0 0 3px rgba(78, 155, 87, 0.2);
+}
+
+.password-toggle {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 13px;
+  color: #4e9b57;
+  user-select: none;
+}
+
+/* =========================
+   ERROR
+========================= */
+.login-error {
+  color: #e74c3c;
+  font-size: 13px;
+  margin: 8px 24px;
+  transition: all 0.3s ease;
+}
+
+/* =========================
+   BUTTON
+========================= */
+.login-card button {
+  width: calc(100% - 48px);
+  margin: 16px 24px 12px;
+  padding: 13px;
+  background: linear-gradient(135deg, #6fbf73, #4e9b57);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.login-card button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* =========================
+   CANCEL
+========================= */
+.login-cancel {
+  margin-bottom: 16px;
+  cursor: pointer;
+  color: #777;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.login-cancel:hover {
+  color: #4e9b57;
+  text-decoration: underline;
+}
+
+/* =========================
+   ANIMATIONS
+========================= */
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cardEntrance {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes waveMove {
+  from { transform: translateX(0); }
+  to { transform: translateX(20px); }
+}
+
+/* =========================
+   MOBILE
+========================= */
+@media (max-width: 420px) {
+  .login-card {
+    width: 90%;
+  }
+}
