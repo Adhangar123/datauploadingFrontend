@@ -1,4 +1,3 @@
-// src/components/Dashboard.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -37,21 +36,40 @@ const Dashboard = () => {
         </div>
 
         <div className="dashboard-cards">
-          <div className="dashboard-card farmer" onClick={() => handleCardClick("/farmer-data")}>
+          <div
+            className="dashboard-card farmer"
+            onClick={() => handleCardClick("/farmer-data")}
+          >
             <div className="card-icon">👨‍🌾</div>
             <h2>Farmer Data</h2>
             <p>Upload farmer profiles, validate records, and sync them securely.</p>
           </div>
 
-          <div className="dashboard-card land" onClick={() => handleCardClick("/land-parcel-data")}>
+          <div
+            className="dashboard-card land"
+            onClick={() => handleCardClick("/land-parcel-data")}
+          >
             <div className="card-icon">🌾</div>
             <h2>Land Parcel Data</h2>
             <p>Upload land parcel boundaries, KML/GeoJSON files, and metadata.</p>
           </div>
+
+          <div
+            className="dashboard-card cra"
+          >
+            <div className="card-icon">📊</div>
+            <h2>CRA Data</h2>
+            <p>Upload CRA datasets, KML/GeoJSON files, and metadata.</p>
+          </div>
         </div>
       </div>
 
-      {showLogin && <Login onClose={() => setShowLogin(false)} onLoginSuccess={handleLoginSuccess} />}
+      {showLogin && (
+        <Login
+          onClose={() => setShowLogin(false)}
+          onLoginSuccess={handleLoginSuccess}
+        />
+      )}
     </div>
   );
 };
