@@ -13,13 +13,25 @@
   --shadow: 0 6px 14px rgba(0, 0, 0, 0.06);
 }
 
-/* ================= ROOT ================= */
 .kml-upload-container {
   width: 100%;
+  min-height:85.6vh;
+  margin-top: 0px;
   padding: clamp(12px, 2vw, 20px);
   font-family: "Segoe UI", system-ui, sans-serif;
-  background: var(--bg);
+
+  background:
+    linear-gradient(
+      rgba(248, 248, 248, 0.89),
+      rgba(248, 250, 252, 0.252)
+    ),
+    url("/img/8thBg.jpg");
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
+
 
 /* ================= HEADER ================= */
 .kml-upload-container h2 {
@@ -72,8 +84,8 @@
 .stack-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  margin-top: 20px;
+  gap: 60px;
+  margin-top: 40px;
 }
 
 /* ================= BOX ================= */
@@ -244,4 +256,24 @@ tbody tr:hover {
     width: 100%;
     margin-top: 8px;
   }
+}
+/* ================= FILE + BUTTONS IN ONE ROW ================= */
+.file-action-row {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  margin-bottom: 20px;
+  flex-wrap: wrap; /* mobile pe wrap ho jaaye */
+}
+
+/* file input width control */
+.file-action-row input[type="file"] {
+  max-width: 260px;
+  font-size: 14px;
+}
+
+/* reuse your outline button row styling */
+.file-action-row .button-outline-row {
+  display: flex;
+  gap: 10px;
 }

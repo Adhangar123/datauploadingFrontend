@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import * as toGeoJSON from "@tmcw/togeojson";
 import Papa from "papaparse";
 import "../style/KmlTodatabase.css";
@@ -21,11 +21,18 @@ const ALLOWED_FIELDS = [
 const validateRow = (row) => {
   const errors = [];
 
-  ["farmer_name", "project_id", "village", "gram_panchayat", "block", "district", "state", "parcel_id"].forEach(
-    (field) => {
-      if (!row[field]?.trim()) errors.push(`${field} is required`);
-    }
-  );
+  [
+    "farmer_name",
+    "project_id",
+    "village",
+    "gram_panchayat",
+    "block",
+    "district",
+    "state",
+    "parcel_id",
+  ].forEach((field) => {
+    if (!row[field]?.trim()) errors.push(`${field} is required`);
+  });
 
   if (!row.farmer_id || isNaN(Number(row.farmer_id)) || Number(row.farmer_id) <= 0) {
     errors.push("farmer_id must be a valid number");
@@ -49,6 +56,9 @@ const FarmerDataUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
+  const fileInputRef = useRef(null); // 🔹 reset file input
+
+  /* ---------------- FILE CHANGE ---------------- */
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
@@ -60,19 +70,35 @@ const FarmerDataUpload = () => {
     }
   };
 
+  /* ---------------- RESET ---------------- */
+  const handleReset = () => {
+    setFile(null);
+    setCorrectedRows([]);
+    setIncorrectRows([]);
+    setParsedData([]);
+    setMessage("");
+    setUploading(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""; // clear file input
+    }
+  };
+
+  /* ---------------- NORMALIZE ---------------- */
   const normalizeFieldName = (name) => {
     if (!name) return "";
     const lower = name.trim().toLowerCase();
     const mapping = {
-      "farmerid": "farmer_id",
+      farmerid: "farmer_id",
       "farmer id": "farmer_id",
       "gram panchayat": "gram_panchayat",
       "parcel id": "parcel_id",
-      "onboardingdate": "onboarding_date",
+      onboardingdate: "onboarding_date",
     };
     return mapping[lower] || lower;
   };
 
+  /* ---------------- READ & VALIDATE ---------------- */
   const handleReadFile = async () => {
     if (!file) {
       setMessage("❌ Please select a .kml, .json or .csv file first");
@@ -85,40 +111,33 @@ const FarmerDataUpload = () => {
       const text = await file.text();
       let rawFeatures = [];
 
-      // ───────── KML Parsing (Browser-safe) ─────────
       if (file.name.toLowerCase().endsWith(".kml")) {
         const parser = new DOMParser();
         const kmlDom = parser.parseFromString(text, "text/xml");
         const geojson = toGeoJSON.kml(kmlDom);
         rawFeatures = geojson.features.map((f) => f.properties || {});
-      } 
-      // ───────── JSON Parsing ─────────
-      else if (file.name.toLowerCase().endsWith(".json")) {
+      } else if (file.name.toLowerCase().endsWith(".json")) {
         const json = JSON.parse(text);
         rawFeatures = Array.isArray(json) ? json : [json];
-      } 
-      // ───────── CSV Parsing ─────────
-      else if (file.name.toLowerCase().endsWith(".csv")) {
+      } else if (file.name.toLowerCase().endsWith(".csv")) {
         const result = Papa.parse(text, {
           header: true,
           skipEmptyLines: true,
           transformHeader: normalizeFieldName,
-          dynamicTyping: false,
         });
 
         if (result.errors.length > 0) {
           throw new Error(
-            "CSV parsing error: " + result.errors.map((e) => e.message).join("; ")
+            "CSV parsing error: " +
+              result.errors.map((e) => e.message).join("; ")
           );
         }
 
         rawFeatures = result.data;
-      } 
-      else {
-        throw new Error("Unsupported file type. Use .kml, .json or .csv");
+      } else {
+        throw new Error("Unsupported file type");
       }
 
-      // ───────── Normalize fields ─────────
       const processed = rawFeatures.map((row) => {
         const normalized = {};
         Object.entries(row).forEach(([key, val]) => {
@@ -133,9 +152,9 @@ const FarmerDataUpload = () => {
         return normalized;
       });
 
-      // ───────── Validate rows ─────────
       const valid = [];
       const invalid = [];
+
       processed.forEach((payload) => {
         const validation = validateRow(payload);
         if (validation.isValid) valid.push(payload);
@@ -147,14 +166,14 @@ const FarmerDataUpload = () => {
       setParsedData(valid);
 
       setMessage(
-        `Validation complete\nValid rows: ${valid.length}   •   Invalid: ${invalid.length}`
+        `Validation complete • Valid: ${valid.length} | Invalid: ${invalid.length}`
       );
     } catch (err) {
-      console.error(err);
       setMessage(`❌ ${err.message || "Failed to process file"}`);
     }
   };
 
+  /* ---------------- EDIT ---------------- */
   const handleEdit = (index, field, value) => {
     const updated = [...incorrectRows];
     updated[index] = { ...updated[index], [field]: value };
@@ -169,12 +188,9 @@ const FarmerDataUpload = () => {
     setIncorrectRows(newIncorrect);
     setCorrectedRows(newValid);
     setParsedData(newValid);
-
-    setMessage(
-      `Updated → Valid: ${newValid.length}   •   Invalid: ${newIncorrect.length}`
-    );
   };
 
+  /* ---------------- SEND TO DB ---------------- */
   const handleSendToDB = async () => {
     if (!parsedData.length) return;
 
@@ -182,11 +198,14 @@ const FarmerDataUpload = () => {
     setMessage("Uploading to database...");
 
     try {
-      const res = await fetch("https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsedData),
-      });
+      const res = await fetch(
+        "https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsedData),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json();
@@ -210,102 +229,105 @@ const FarmerDataUpload = () => {
 
   return (
     <div className="kml-upload-container">
-      <h2>Farmer Data Upload (.kml / .json / .csv)</h2>
+      <h2>Farmer Data Upload (.json / .csv)</h2>
 
-      <div className="file-area">
-        <input type="file" accept=".kml,.json,.csv" onChange={handleFileChange} />
-        <button onClick={handleReadFile} disabled={!file}>
-          1️⃣ Read & Validate File
-        </button>
+     <div className="file-action-row">
+        <input
+          type="file"
+          accept=".kml,.json,.csv"
+          onChange={handleFileChange}
+          ref={fileInputRef}
+        />
+
+        <div className="button-outline-row">
+          <button onClick={handleReadFile} disabled={!file}>
+            1️⃣ Read & Validate File
+          </button>
+
+          <button
+            onClick={handleReset}
+            className="reset-btn outline"
+            disabled={!file && !correctedRows.length && !incorrectRows.length}
+          >
+            🔄 Reset
+          </button>
+        </div>
       </div>
 
-      <div className="stack-container">
-        {/* VALID DATA */}
-        <div className="box green">
-          <h3>✅ Valid Records ({correctedRows.length})</h3>
 
-          {correctedRows.length === 0 ? (
-            <p className="no-data">No valid records yet</p>
-          ) : (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {correctedRows.map((row, i) => (
-                    <tr key={i}>
-                      {columns.map((col) => (
-                        <td key={col}>{row[col] ?? "—"}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+
+      <div className="stack-container">
+        {/* VALID */}
+        <div className="box green">
+          <h3>✅ Valid Data</h3>
+
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>{columns.map((c) => <th key={c}>{c}</th>)}</tr>
+              </thead>
+              <tbody>
+                {correctedRows.map((row, i) => (
+                  <tr key={i}>
+                    {columns.map((c) => (
+                      <td key={c}>{row[c] ?? "—"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <button
             className="send-db-btn"
             onClick={handleSendToDB}
-            disabled={uploading || parsedData.length === 0}
+            disabled={uploading || !parsedData.length}
           >
             {uploading ? "Uploading..." : "2️⃣ Send to Database"}
           </button>
+
+          {message && <p className="upload-message">{message}</p>}
         </div>
 
-        {message && <p className="status-message">{message}</p>}
-
-        {/* INVALID / EDITABLE DATA */}
+        {/* INVALID */}
         <div className="box red">
-          <h3>❌ Records to Fix ({incorrectRows.length})</h3>
+          <h3>❌ Incorrect Data (Edit & Approve)</h3>
 
-          {incorrectRows.length === 0 ? (
-            <p className="no-data">No incorrect records</p>
-          ) : (
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  {columns.map((c) => <th key={c}>{c}</th>)}
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {incorrectRows.length === 0 ? (
                   <tr>
-                    {columns.map((col) => <th key={col}>{col}</th>)}
-                    <th>Action</th>
+                    <td colSpan={columns.length + 1}>No Incorrect Data</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {incorrectRows.map((row, i) => (
-                    <React.Fragment key={i}>
-                      <tr>
-                        {columns.map((col) => (
-                          <td key={col}>
-                            <input
-                              className="edit-input"
-                              value={row[col] ?? ""}
-                              onChange={(e) => handleEdit(i, col, e.target.value)}
-                            />
-                          </td>
-                        ))}
-                        <td className="action-cell">
-                          <button
-                            className="approve-btn"
-                            onClick={() => approveRow(i)}
-                          >
-                            Approve ✓
-                          </button>
+                ) : (
+                  incorrectRows.map((row, i) => (
+                    <tr key={i}>
+                      {columns.map((c) => (
+                        <td key={c}>
+                          <input
+                            value={row[c] ?? ""}
+                            onChange={(e) =>
+                              handleEdit(i, c, e.target.value)
+                            }
+                          />
                         </td>
-                      </tr>
-                      {row.__errors && row.__errors.length > 0 && (
-                        <tr className="error-row">
-                          <td colSpan={columns.length + 1} style={{ color: "red", fontSize: "0.85em" }}>
-                            ❌ {row.__errors.join(" • ")}
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      ))}
+                      <td>
+                        <button onClick={() => approveRow(i)}>Approve</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

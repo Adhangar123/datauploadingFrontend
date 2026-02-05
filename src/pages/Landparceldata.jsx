@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import "../style/KmlTodatabase.css";
 import { kml } from "@tmcw/togeojson";
 
@@ -20,23 +20,15 @@ const ALLOWED_FIELDS = [
 const validateRow = (row) => {
   const errors = [];
 
-  // Extra fields check
-  Object.keys(row).forEach((key) => {
-    if (!ALLOWED_FIELDS.includes(key)) {
-      errors.push(`Invalid field: ${key}`);
-    }
-  });
-
-  // Required fields
   if (!row.project_id?.trim()) errors.push("project_id missing");
   if (!row.parcel_id?.trim()) errors.push("parcel_id missing");
   if (!row.farmer_id?.trim()) errors.push("farmer_id missing");
   if (!row.onboarding_date?.trim()) errors.push("onboarding_date missing");
   if (!row.farmer_name?.trim()) errors.push("farmer_name missing");
 
-  // area_ha must be a positive number
-  if (!row.area_ha || isNaN(Number(row.area_ha)) || Number(row.area_ha) <= 0)
+  if (!row.area_ha || isNaN(Number(row.area_ha)) || Number(row.area_ha) <= 0) {
     errors.push("area_ha invalid");
+  }
 
   return {
     isValid: errors.length === 0,
@@ -62,7 +54,7 @@ const parseCSV = (text) => {
 };
 
 /* =========================
-   KML PARSER (OPTIONAL)
+   KML PARSER
 ========================= */
 const parseKML = async (file) => {
   const text = await file.text();
@@ -91,14 +83,35 @@ const Landparceldata = () => {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
+  const fileInputRef = useRef(null);
+
+  /* ================= FILE CHANGE ================= */
   const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+    const selected = e.target.files[0];
+    if (selected) {
+      setFile(selected);
+      setCorrectedRows([]);
+      setIncorrectRows([]);
+      setParsedData([]);
+      setMessage("");
+    }
+  };
+
+  /* ================= RESET ================= */
+  const handleReset = () => {
+    setFile(null);
     setCorrectedRows([]);
     setIncorrectRows([]);
     setParsedData([]);
     setMessage("");
+    setUploading(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
+  /* ================= READ FILE ================= */
   const handleReadFile = async () => {
     if (!file) {
       setMessage("❌ Please select CSV or KML file");
@@ -111,10 +124,10 @@ const Landparceldata = () => {
       if (file.name.endsWith(".csv")) {
         const text = await file.text();
         rows = parseCSV(text);
-      }
-
-      if (file.name.endsWith(".kml")) {
+      } else if (file.name.endsWith(".kml")) {
         rows = await parseKML(file);
+      } else {
+        throw new Error("Unsupported file type");
       }
 
       const valid = [];
@@ -146,6 +159,7 @@ const Landparceldata = () => {
     }
   };
 
+  /* ================= EDIT ================= */
   const handleEdit = (rowIndex, field, value) => {
     const updated = [...incorrectRows];
     updated[rowIndex][field] = value;
@@ -154,16 +168,13 @@ const Landparceldata = () => {
 
   const approveRow = (index) => {
     const row = incorrectRows[index];
-
-    // Re-validate edited row
     const { isValid } = validateRow(row);
 
     if (!isValid) {
-      setMessage("❌ Row is still invalid. Please correct data before approving.");
+      setMessage("❌ Row still invalid. Please correct data.");
       return;
     }
 
-    // Move to corrected
     const updatedIncorrect = incorrectRows.filter((_, i) => i !== index);
     const updatedCorrected = [...correctedRows, row];
 
@@ -176,16 +187,22 @@ const Landparceldata = () => {
     );
   };
 
+  /* ================= SEND TO DB ================= */
   const handleSendToDB = async () => {
     if (!parsedData.length) return;
 
     setUploading(true);
+    setMessage("Uploading to database...");
+
     try {
-      const res = await fetch("https://datauploadingbackend-13977221722.asia-south2.run.app/api/land-parcel/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsedData),
-      });
+      const res = await fetch(
+        "https://datauploadingbackend-13977221722.asia-south2.run.app/api/land-parcel/upload",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsedData),
+        }
+      );
 
       const result = await res.json();
       if (!res.ok) throw new Error(result.message);
@@ -198,23 +215,46 @@ const Landparceldata = () => {
     }
   };
 
-  const columns = correctedRows.length
-    ? Object.keys(correctedRows[0])
-    : incorrectRows.length
-    ? Object.keys(incorrectRows[0])
-    : [];
+  const columns =
+    correctedRows.length > 0
+      ? Object.keys(correctedRows[0])
+      : incorrectRows.length > 0
+      ? Object.keys(incorrectRows[0])
+      : [];
 
   return (
     <div className="kml-upload-container">
-      <h2>CSV / KML → Land Parcel Data Upload</h2>
+      <h2>Land Parcel Data Upload (.kml / .csv)</h2>
 
-      <input type="file" accept=".csv,.kml" onChange={handleFileChange} />
-      <button onClick={handleReadFile}>1️⃣ Read & Validate File</button>
+      {/* FILE + BUTTONS (SAME UI AS FARMER) */}
+      <div className="file-action-row">
+        <input
+          type="file"
+          accept=".csv,.kml"
+          onChange={handleFileChange}
+          ref={fileInputRef}
+        />
+
+        <div className="button-outline-row">
+          <button onClick={handleReadFile} disabled={!file}>
+            1️⃣ Read & Validate File
+          </button>
+
+          <button
+            onClick={handleReset}
+            className="reset-btn outline"
+            disabled={!file && !correctedRows.length && !incorrectRows.length}
+          >
+            🔄 Reset
+          </button>
+        </div>
+      </div>
 
       <div className="stack-container">
         {/* VALID */}
         <div className="box green">
           <h3>✅ Valid Data</h3>
+
           <div className="table-scroll">
             <table>
               <thead>
@@ -246,6 +286,7 @@ const Landparceldata = () => {
         {/* INVALID */}
         <div className="box red">
           <h3>❌ Incorrect Data (Edit & Approve)</h3>
+
           <div className="table-scroll">
             <table>
               <thead>
@@ -257,9 +298,7 @@ const Landparceldata = () => {
               <tbody>
                 {incorrectRows.length === 0 ? (
                   <tr>
-                    <td colSpan={columns.length + 1}>
-                      No Incorrect Data
-                    </td>
+                    <td colSpan={columns.length + 1}>No Incorrect Data</td>
                   </tr>
                 ) : (
                   incorrectRows.map((row, i) => (
