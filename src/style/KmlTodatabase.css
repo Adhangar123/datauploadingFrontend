@@ -7,7 +7,7 @@
   --bg: #f8fafc;
   --card-bg: #ffffff;
   --border: #e5e7eb;
-  --text-dark: #1e293b;
+  --text-dark: #ffffff;
   --text-muted: #64748b;
   --radius: 10px;
   --shadow: 0 6px 14px rgba(0, 0, 0, 0.06);
@@ -22,8 +22,8 @@
 
   background:
     linear-gradient(
-      rgba(248, 248, 248, 0.89),
-      rgba(248, 250, 252, 0.252)
+      rgba(246, 219, 165, 0.636),
+      rgba(205, 246, 169, 0.152)
     ),
     url("/img/8thBg.jpg");
 

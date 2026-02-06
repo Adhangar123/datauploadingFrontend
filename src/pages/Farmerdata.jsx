@@ -1,5 +1,4 @@
 import React, { useState, useRef } from "react";
-import * as toGeoJSON from "@tmcw/togeojson";
 import Papa from "papaparse";
 import "../style/KmlTodatabase.css";
 
@@ -56,7 +55,7 @@ const FarmerDataUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const fileInputRef = useRef(null); // 🔹 reset file input
+  const fileInputRef = useRef(null);
 
   /* ---------------- FILE CHANGE ---------------- */
   const handleFileChange = (e) => {
@@ -80,7 +79,7 @@ const FarmerDataUpload = () => {
     setUploading(false);
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = ""; // clear file input
+      fileInputRef.current.value = "";
     }
   };
 
@@ -101,7 +100,7 @@ const FarmerDataUpload = () => {
   /* ---------------- READ & VALIDATE ---------------- */
   const handleReadFile = async () => {
     if (!file) {
-      setMessage("❌ Please select a .kml, .json or .csv file first");
+      setMessage("❌ Please select a .json or .csv file first");
       return;
     }
 
@@ -109,36 +108,32 @@ const FarmerDataUpload = () => {
 
     try {
       const text = await file.text();
-      let rawFeatures = [];
+      let rawRows = [];
 
-      if (file.name.toLowerCase().endsWith(".kml")) {
-        const parser = new DOMParser();
-        const kmlDom = parser.parseFromString(text, "text/xml");
-        const geojson = toGeoJSON.kml(kmlDom);
-        rawFeatures = geojson.features.map((f) => f.properties || {});
-      } else if (file.name.toLowerCase().endsWith(".json")) {
+      if (file.name.toLowerCase().endsWith(".json")) {
         const json = JSON.parse(text);
-        rawFeatures = Array.isArray(json) ? json : [json];
-      } else if (file.name.toLowerCase().endsWith(".csv")) {
+        rawRows = Array.isArray(json) ? json : [json];
+      } 
+      else if (file.name.toLowerCase().endsWith(".csv")) {
         const result = Papa.parse(text, {
           header: true,
           skipEmptyLines: true,
           transformHeader: normalizeFieldName,
         });
 
-        if (result.errors.length > 0) {
+        if (result.errors.length) {
           throw new Error(
-            "CSV parsing error: " +
-              result.errors.map((e) => e.message).join("; ")
+            result.errors.map((e) => e.message).join("; ")
           );
         }
 
-        rawFeatures = result.data;
-      } else {
-        throw new Error("Unsupported file type");
+        rawRows = result.data;
+      } 
+      else {
+        throw new Error("Only .json and .csv files are supported");
       }
 
-      const processed = rawFeatures.map((row) => {
+      const processed = rawRows.map((row) => {
         const normalized = {};
         Object.entries(row).forEach(([key, val]) => {
           const normKey = normalizeFieldName(key);
@@ -146,30 +141,30 @@ const FarmerDataUpload = () => {
             normalized[normKey] = val == null ? "" : String(val).trim();
           }
         });
+
         ALLOWED_FIELDS.forEach((f) => {
           if (!(f in normalized)) normalized[f] = "";
         });
+
         return normalized;
       });
 
       const valid = [];
       const invalid = [];
 
-      processed.forEach((payload) => {
-        const validation = validateRow(payload);
-        if (validation.isValid) valid.push(payload);
-        else invalid.push({ ...payload, __errors: validation.errors });
+      processed.forEach((row) => {
+        const check = validateRow(row);
+        if (check.isValid) valid.push(row);
+        else invalid.push({ ...row, __errors: check.errors });
       });
 
       setCorrectedRows(valid);
       setIncorrectRows(invalid);
       setParsedData(valid);
 
-      setMessage(
-        `Validation complete • Valid: ${valid.length} | Invalid: ${invalid.length}`
-      );
+      setMessage(`Validation complete • Valid: ${valid.length} | Invalid: ${invalid.length}`);
     } catch (err) {
-      setMessage(`❌ ${err.message || "Failed to process file"}`);
+      setMessage(`❌ ${err.message}`);
     }
   };
 
@@ -231,10 +226,10 @@ const FarmerDataUpload = () => {
     <div className="kml-upload-container">
       <h2>Farmer Data Upload (.json / .csv)</h2>
 
-     <div className="file-action-row">
+      <div className="file-action-row">
         <input
           type="file"
-          accept=".kml,.json,.csv"
+          accept=".json,.csv"
           onChange={handleFileChange}
           ref={fileInputRef}
         />
@@ -254,8 +249,6 @@ const FarmerDataUpload = () => {
         </div>
       </div>
 
-
-
       <div className="stack-container">
         {/* VALID */}
         <div className="box green">
@@ -270,7 +263,7 @@ const FarmerDataUpload = () => {
                 {correctedRows.map((row, i) => (
                   <tr key={i}>
                     {columns.map((c) => (
-                      <td key={c}>{row[c] ?? "—"}</td>
+                      <td key={c}>{row[c] || "—"}</td>
                     ))}
                   </tr>
                 ))}
@@ -312,7 +305,7 @@ const FarmerDataUpload = () => {
                       {columns.map((c) => (
                         <td key={c}>
                           <input
-                            value={row[c] ?? ""}
+                            value={row[c] || ""}
                             onChange={(e) =>
                               handleEdit(i, c, e.target.value)
                             }
