@@ -1,18 +1,7 @@
 import React, { useState, useRef } from "react";
 import "../style/KmlTodatabase.css";
 import { kml } from "@tmcw/togeojson";
-
-/* =========================
-   ALLOWED FIELDS
-========================= */
-const ALLOWED_FIELDS = [
-  "project_id",
-  "parcel_id",
-  "farmer_id",
-  "onboarding_date",
-  "area_ha",
-  "farmer_name",
-];
+import shp from "shpjs";
 
 /* =========================
    VALIDATION
@@ -22,53 +11,29 @@ const validateRow = (row) => {
 
   if (!row.project_id?.trim()) errors.push("project_id missing");
   if (!row.parcel_id?.trim()) errors.push("parcel_id missing");
-  if (!row.farmer_id?.trim()) errors.push("farmer_id missing");
-  if (!row.onboarding_date?.trim()) errors.push("onboarding_date missing");
   if (!row.farmer_name?.trim()) errors.push("farmer_name missing");
+  if (!row.onboarding_date?.trim()) errors.push("onboarding_date missing");
+  if (!row.geometry) errors.push("geometry missing");
 
-  if (!row.area_ha || isNaN(Number(row.area_ha)) || Number(row.area_ha) <= 0) {
-    errors.push("area_ha invalid");
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
+  return { isValid: errors.length === 0, errors };
 };
 
 /* =========================
-   CSV PARSER
+   PARSE KML
 ========================= */
-const parseCSV = (text) => {
-  const lines = text.split("\n").filter(Boolean);
-  const headers = lines[0].split(",").map((h) => h.trim());
-
-  return lines.slice(1).map((line) => {
-    const values = line.split(",");
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = values[i]?.trim() ?? "";
-    });
-    return obj;
-  });
-};
-
-/* =========================
-   KML PARSER
-========================= */
-const parseKML = async (file) => {
-  const text = await file.text();
+const parseKMLText = (text, sourceFile) => {
   const parser = new DOMParser();
   const xml = parser.parseFromString(text, "text/xml");
   const geojson = kml(xml);
 
-  return geojson.features.map((f) => ({
+  return geojson.features.map((f, i) => ({
     project_id: f.properties?.project_id || "",
-    parcel_id: f.properties?.parcel_id || "",
+    parcel_id: f.properties?.parcel_id || `parcel_${i + 1}`,
     farmer_id: f.properties?.farmer_id || "",
-    onboarding_date: f.properties?.onboarding_date || "",
-    area_ha: Number(f.properties?.area_ha || 0),
     farmer_name: f.properties?.farmer_name || "",
+    onboarding_date: f.properties?.onboarding_date || "",
+    geometry: f.geometry,
+    source_file: sourceFile,
   }));
 };
 
@@ -83,6 +48,9 @@ const Landparceldata = () => {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
+  const [progress, setProgress] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
+
   const fileInputRef = useRef(null);
 
   /* ================= FILE CHANGE ================= */
@@ -93,6 +61,8 @@ const Landparceldata = () => {
       setCorrectedRows([]);
       setIncorrectRows([]);
       setParsedData([]);
+      setProgress(0);
+      setFileCount(0);
       setMessage("");
     }
   };
@@ -103,48 +73,68 @@ const Landparceldata = () => {
     setCorrectedRows([]);
     setIncorrectRows([]);
     setParsedData([]);
+    setProgress(0);
+    setFileCount(0);
     setMessage("");
     setUploading(false);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   /* ================= READ FILE ================= */
   const handleReadFile = async () => {
     if (!file) {
-      setMessage("❌ Please select CSV or KML file");
+      setMessage("❌ Please select .kml or .zip file");
       return;
     }
 
     try {
       let rows = [];
+      setProgress(5);
 
-      if (file.name.endsWith(".csv")) {
+      /* ---------- ZIP (SHAPEFILE) ---------- */
+      if (file.name.endsWith(".zip")) {
+        setMessage("📦 Reading Shapefile ZIP...");
+        setFileCount(1);
+
+        const arrayBuffer = await file.arrayBuffer(); // ✅ FIX
+        const geojson = await shp(arrayBuffer);       // ✅ FIX
+
+        if (!geojson?.features?.length) {
+          throw new Error("No features found in shapefile ZIP");
+        }
+
+        setProgress(70);
+
+        rows = geojson.features.map((f, i) => ({
+          project_id: f.properties?.project_id || "",
+          parcel_id: f.properties?.parcel_id || `parcel_${i + 1}`,
+          farmer_id: f.properties?.farmer_id || "",
+          farmer_name: f.properties?.farmer_name || "",
+          onboarding_date: f.properties?.onboarding_date || "",
+          geometry: f.geometry,
+          source_file: file.name,
+        }));
+
+        setProgress(100);
+      }
+
+      /* ---------- KML ---------- */
+      else if (file.name.endsWith(".kml")) {
+        setMessage("🗺 Reading KML...");
         const text = await file.text();
-        rows = parseCSV(text);
-      } else if (file.name.endsWith(".kml")) {
-        rows = await parseKML(file);
+        rows = parseKMLText(text, file.name);
+        setFileCount(1);
+        setProgress(100);
       } else {
-        throw new Error("Unsupported file type");
+        throw new Error("Only .kml or .zip supported");
       }
 
       const valid = [];
       const invalid = [];
 
-      rows.forEach((r) => {
-        const payload = {
-          project_id: r.project_id ?? "",
-          parcel_id: r.parcel_id ?? "",
-          farmer_id: r.farmer_id ?? "",
-          onboarding_date: r.onboarding_date ?? "",
-          area_ha: Number(r.area_ha ?? 0),
-          farmer_name: r.farmer_name ?? "",
-        };
-
-        const { isValid } = validateRow(payload);
-        isValid ? valid.push(payload) : invalid.push(payload);
+      rows.forEach((row) => {
+        const { isValid } = validateRow(row);
+        isValid ? valid.push(row) : invalid.push(row);
       });
 
       setCorrectedRows(valid);
@@ -152,14 +142,15 @@ const Landparceldata = () => {
       setParsedData(valid);
 
       setMessage(
-        `✅ Validation Done | Valid: ${valid.length} | Invalid: ${invalid.length}`
+        `✅ Parsed ${rows.length} parcels | Valid: ${valid.length} | Invalid: ${invalid.length}`
       );
     } catch (err) {
+      console.error(err);
       setMessage(`❌ ${err.message}`);
     }
   };
 
-  /* ================= EDIT ================= */
+  /* ================= EDIT INVALID ================= */
   const handleEdit = (rowIndex, field, value) => {
     const updated = [...incorrectRows];
     updated[rowIndex][field] = value;
@@ -171,7 +162,7 @@ const Landparceldata = () => {
     const { isValid } = validateRow(row);
 
     if (!isValid) {
-      setMessage("❌ Row still invalid. Please correct data.");
+      setMessage("❌ Row still invalid");
       return;
     }
 
@@ -181,10 +172,6 @@ const Landparceldata = () => {
     setIncorrectRows(updatedIncorrect);
     setCorrectedRows(updatedCorrected);
     setParsedData(updatedCorrected);
-
-    setMessage(
-      `✅ Validation Updated | Valid: ${updatedCorrected.length} | Invalid: ${updatedIncorrect.length}`
-    );
   };
 
   /* ================= SEND TO DB ================= */
@@ -205,9 +192,11 @@ const Landparceldata = () => {
       );
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message);
+      if (!res.ok) throw new Error(result.message || "Upload failed");
 
-      setMessage(`✅ Data uploaded successfully | Inserted: ${result.inserted}`);
+      setMessage(
+        `✅ Uploaded | Inserted: ${result.inserted} | Failed: ${result.failed}`
+      );
     } catch (err) {
       setMessage(`❌ ${err.message}`);
     } finally {
@@ -222,15 +211,15 @@ const Landparceldata = () => {
       ? Object.keys(incorrectRows[0])
       : [];
 
+  /* ================= UI (UNCHANGED) ================= */
   return (
     <div className="kml-upload-container">
-      <h2>Land Parcel Data Upload (.kml / .csv)</h2>
+      <h2>Land Parcel Data Upload (.kml / .zip)</h2>
 
-      {/* FILE + BUTTONS (SAME UI AS FARMER) */}
       <div className="file-action-row">
         <input
           type="file"
-          accept=".csv,.kml"
+          accept=".kml,.zip"
           onChange={handleFileChange}
           ref={fileInputRef}
         />
@@ -250,6 +239,19 @@ const Landparceldata = () => {
         </div>
       </div>
 
+      {fileCount > 0 && (
+        <div className="progress-wrapper">
+          <p>📂 Files: {fileCount}</p>
+          <div className="progress-bar">
+            <div
+              className="progress-fill"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p>{progress}%</p>
+        </div>
+      )}
+
       <div className="stack-container">
         {/* VALID */}
         <div className="box green">
@@ -264,7 +266,9 @@ const Landparceldata = () => {
                 {correctedRows.map((row, i) => (
                   <tr key={i}>
                     {columns.map((c) => (
-                      <td key={c}>{String(row[c])}</td>
+                      <td key={c}>
+                        {c === "geometry" ? "Polygon" : String(row[c])}
+                      </td>
                     ))}
                   </tr>
                 ))}
@@ -305,18 +309,20 @@ const Landparceldata = () => {
                     <tr key={i}>
                       {columns.map((c) => (
                         <td key={c}>
-                          <input
-                            value={row[c] ?? ""}
-                            onChange={(e) =>
-                              handleEdit(i, c, e.target.value)
-                            }
-                          />
+                          {c === "geometry" ? (
+                            "Invalid Geometry"
+                          ) : (
+                            <input
+                              value={row[c] ?? ""}
+                              onChange={(e) =>
+                                handleEdit(i, c, e.target.value)
+                              }
+                            />
+                          )}
                         </td>
                       ))}
                       <td>
-                        <button onClick={() => approveRow(i)}>
-                          Approve
-                        </button>
+                        <button onClick={() => approveRow(i)}>Approve</button>
                       </td>
                     </tr>
                   ))

@@ -1,35 +1,31 @@
 import React, { useState, useRef } from "react";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import "../style/KmlTodatabase.css";
 
 /* ---------------- ALLOWED DB FIELDS ---------------- */
 const ALLOWED_FIELDS = [
   "farmer_id",
-  "farmer_name",
-  "project_id",
-  "village",
-  "gram_panchayat",
-  "block",
-  "district",
-  "state",
-  "parcel_id",
+  "OBJECTID",
+  "id",
   "onboarding_date",
+  "farmer_name",
+  "state",
+  "district",
+  "blocks",
+  "grampanchayat",
+  "village",
+  "land_owner",
+  "relationship_to_land_owner",
+  "plot_number",
+  "project_code"
 ];
 
 /* ---------------- VALIDATION ---------------- */
 const validateRow = (row) => {
   const errors = [];
 
-  [
-    "farmer_name",
-    "project_id",
-    "village",
-    "gram_panchayat",
-    "block",
-    "district",
-    "state",
-    "parcel_id",
-  ].forEach((field) => {
+  ["farmer_name", "state", "district", "village"].forEach((field) => {
     if (!row[field]?.trim()) errors.push(`${field} is required`);
   });
 
@@ -41,10 +37,39 @@ const validateRow = (row) => {
     errors.push("onboarding_date must be a valid date");
   }
 
-  return {
-    isValid: errors.length === 0,
-    errors,
+  return { isValid: errors.length === 0, errors };
+};
+
+/* ---------------- HEADER NORMALIZATION ---------------- */
+const normalizeFieldName = (name) => {
+  if (!name) return "";
+  const lower = name.trim().toLowerCase();
+
+  const mapping = {
+    farmerid: "farmer_id",
+    "farmer id": "farmer_id",
+    objectid: "OBJECTID",
+    onboardingdate: "onboarding_date",
+    "onboarding date": "onboarding_date",
+    "farmer name": "farmer_name",
+    grampanchayat: "grampanchayat",
+    "gram panchayat": "grampanchayat",
+    landowner: "land_owner",
+    "land owner": "land_owner",
+    relationshiptolandowner: "relationship_to_land_owner",
+    "relationship to land owner": "relationship_to_land_owner",
+    plotnumber: "plot_number",
+    "plot number": "plot_number",
+    projectcode: "project_code",
+    "project code": "project_code",
+    blocks: "blocks",
+    village: "village",
+    district: "district",
+    state: "state",
+    id: "id"
   };
+
+  return mapping[lower] || lower;
 };
 
 const FarmerDataUpload = () => {
@@ -78,43 +103,25 @@ const FarmerDataUpload = () => {
     setMessage("");
     setUploading(false);
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  /* ---------------- NORMALIZE ---------------- */
-  const normalizeFieldName = (name) => {
-    if (!name) return "";
-    const lower = name.trim().toLowerCase();
-    const mapping = {
-      farmerid: "farmer_id",
-      "farmer id": "farmer_id",
-      "gram panchayat": "gram_panchayat",
-      "parcel id": "parcel_id",
-      onboardingdate: "onboarding_date",
-    };
-    return mapping[lower] || lower;
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   /* ---------------- READ & VALIDATE ---------------- */
   const handleReadFile = async () => {
     if (!file) {
-      setMessage("❌ Please select a .json or .csv file first");
+      setMessage("❌ Please select a .xlsx or .csv file first");
       return;
     }
 
     setMessage("Processing file...");
 
     try {
-      const text = await file.text();
       let rawRows = [];
 
-      if (file.name.toLowerCase().endsWith(".json")) {
-        const json = JSON.parse(text);
-        rawRows = Array.isArray(json) ? json : [json];
-      } 
-      else if (file.name.toLowerCase().endsWith(".csv")) {
+      /* ===== CSV ===== */
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        const text = await file.text();
+
         const result = Papa.parse(text, {
           header: true,
           skipEmptyLines: true,
@@ -122,23 +129,43 @@ const FarmerDataUpload = () => {
         });
 
         if (result.errors.length) {
-          throw new Error(
-            result.errors.map((e) => e.message).join("; ")
-          );
+          throw new Error(result.errors.map((e) => e.message).join("; "));
         }
 
         rawRows = result.data;
-      } 
-      else {
-        throw new Error("Only .json and .csv files are supported");
       }
 
+      /* ===== EXCEL ===== */
+      else if (file.name.toLowerCase().endsWith(".xlsx")) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        rawRows = json.map((row) => {
+          const normalized = {};
+          Object.entries(row).forEach(([key, val]) => {
+            const normKey = normalizeFieldName(key);
+            normalized[normKey] = String(val).trim();
+          });
+          return normalized;
+        });
+      }
+
+      else {
+        throw new Error("Only .xlsx and .csv files are supported");
+      }
+
+      /* ===== FIELD FILTERING ===== */
       const processed = rawRows.map((row) => {
         const normalized = {};
+
         Object.entries(row).forEach(([key, val]) => {
-          const normKey = normalizeFieldName(key);
-          if (ALLOWED_FIELDS.includes(normKey)) {
-            normalized[normKey] = val == null ? "" : String(val).trim();
+          if (ALLOWED_FIELDS.includes(key)) {
+            normalized[key] = val || "";
           }
         });
 
@@ -224,12 +251,12 @@ const FarmerDataUpload = () => {
 
   return (
     <div className="kml-upload-container">
-      <h2>Farmer Data Upload (.json / .csv)</h2>
+      <h2>Farmer Data Upload (.xlsx / .csv)</h2>
 
       <div className="file-action-row">
         <input
           type="file"
-          accept=".json,.csv"
+          accept=".xlsx,.csv"
           onChange={handleFileChange}
           ref={fileInputRef}
         />
@@ -306,9 +333,7 @@ const FarmerDataUpload = () => {
                         <td key={c}>
                           <input
                             value={row[c] || ""}
-                            onChange={(e) =>
-                              handleEdit(i, c, e.target.value)
-                            }
+                            onChange={(e) => handleEdit(i, c, e.target.value)}
                           />
                         </td>
                       ))}
