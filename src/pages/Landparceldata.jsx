@@ -1,185 +1,177 @@
 import React, { useState, useRef } from "react";
 import "../style/KmlTodatabase.css";
 import { kml } from "@tmcw/togeojson";
-import shp from "shpjs";
 
 /* =========================
-   VALIDATION
+   FIELD TYPE VALIDATION
 ========================= */
+const NUMBER_FIELDS = ["OBJECTID", "id"]; // numeric fields
+const STRING_FIELDS = [
+  "project_id",
+  "parcel_id",
+  "farmer_id",
+  "farmer_name",
+  "onboarding_date",
+  "drone_image_url",
+  "drone_tile_url",
+]; // string fields
+
 const validateRow = (row) => {
-  const errors = [];
+  // Number fields should be numbers or null
+  for (let field of NUMBER_FIELDS) {
+    if (row[field] !== null && row[field] !== undefined && isNaN(Number(row[field]))) {
+      return false;
+    }
+  }
 
-  if (!row.project_id?.trim()) errors.push("project_id missing");
-  if (!row.parcel_id?.trim()) errors.push("parcel_id missing");
-  if (!row.farmer_name?.trim()) errors.push("farmer_name missing");
-  if (!row.onboarding_date?.trim()) errors.push("onboarding_date missing");
-  if (!row.geometry) errors.push("geometry missing");
+  // String fields should be strings or null
+  for (let field of STRING_FIELDS) {
+    if (row[field] !== null && row[field] !== undefined && typeof row[field] !== "string") {
+      return false;
+    }
+  }
 
-  return { isValid: errors.length === 0, errors };
+  return true;
 };
 
 /* =========================
-   PARSE KML
+   PARSE KML / GEOJSON
 ========================= */
-const parseKMLText = (text, sourceFile) => {
+const normalizeRow = (f, i, fileName) => ({
+  project_id: f.properties?.project_id ?? null,
+  parcel_id: f.properties?.parcel_id ?? `parcel_${i + 1}`,
+  OBJECTID: f.properties?.OBJECTID ?? null,
+  id: f.properties?.id ?? null,
+  farmer_id: f.properties?.farmer_id ?? null,
+  farmer_name: f.properties?.farmer_name ?? null,
+  onboarding_date: f.properties?.onboarding_date ?? null,
+  drone_survey:
+    f.properties?.drone_survey === true ||
+    f.properties?.drone_survey === "true" ||
+    false,
+  drone_image_url: f.properties?.drone_image_url ?? null,
+  drone_tile_url: f.properties?.drone_tile_url ?? null,
+  geom: f.geometry ?? null,
+  source_file: fileName,
+});
+
+const parseKML = (text, fileName) => {
   const parser = new DOMParser();
   const xml = parser.parseFromString(text, "text/xml");
   const geojson = kml(xml);
 
-  return geojson.features.map((f, i) => ({
-    project_id: f.properties?.project_id || "",
-    parcel_id: f.properties?.parcel_id || `parcel_${i + 1}`,
-    farmer_id: f.properties?.farmer_id || "",
-    farmer_name: f.properties?.farmer_name || "",
-    onboarding_date: f.properties?.onboarding_date || "",
-    geometry: f.geometry,
-    source_file: sourceFile,
-  }));
+  return geojson.features.map((f, i) => normalizeRow(f, i, fileName));
+};
+
+const parseGeoJSON = (text, fileName) => {
+  const geojson = JSON.parse(text);
+  return geojson.features.map((f, i) => normalizeRow(f, i, fileName));
 };
 
 /* =========================
-   COMPONENT
+   MAIN COMPONENT
 ========================= */
 const Landparceldata = () => {
   const [file, setFile] = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
   const [incorrectRows, setIncorrectRows] = useState([]);
-  const [parsedData, setParsedData] = useState([]);
-  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-
+  const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [fileCount, setFileCount] = useState(0);
 
   const fileInputRef = useRef(null);
 
-  /* ================= FILE CHANGE ================= */
+  const columns = [
+    "project_id",
+    "parcel_id",
+    "OBJECTID",
+    "id",
+    "farmer_id",
+    "farmer_name",
+    "onboarding_date",
+    "drone_survey",
+    "drone_image_url",
+    "drone_tile_url",
+    "geom",
+  ];
+
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
       setFile(selected);
       setCorrectedRows([]);
       setIncorrectRows([]);
-      setParsedData([]);
-      setProgress(0);
-      setFileCount(0);
       setMessage("");
+      setFileCount(1);
+      setProgress(0);
     }
   };
 
-  /* ================= RESET ================= */
-  const handleReset = () => {
-    setFile(null);
-    setCorrectedRows([]);
-    setIncorrectRows([]);
-    setParsedData([]);
-    setProgress(0);
-    setFileCount(0);
-    setMessage("");
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  /* ================= READ FILE ================= */
   const handleReadFile = async () => {
     if (!file) {
-      setMessage("❌ Please select .kml or .zip file");
+      setMessage("❌ Select .kml or .geojson file");
       return;
     }
 
     try {
       let rows = [];
-      setProgress(5);
+      const text = await file.text();
 
-      /* ---------- ZIP (SHAPEFILE) ---------- */
-      if (file.name.endsWith(".zip")) {
-        setMessage("📦 Reading Shapefile ZIP...");
-        setFileCount(1);
-
-        const arrayBuffer = await file.arrayBuffer(); // ✅ FIX
-        const geojson = await shp(arrayBuffer);       // ✅ FIX
-
-        if (!geojson?.features?.length) {
-          throw new Error("No features found in shapefile ZIP");
-        }
-
-        setProgress(70);
-
-        rows = geojson.features.map((f, i) => ({
-          project_id: f.properties?.project_id || "",
-          parcel_id: f.properties?.parcel_id || `parcel_${i + 1}`,
-          farmer_id: f.properties?.farmer_id || "",
-          farmer_name: f.properties?.farmer_name || "",
-          onboarding_date: f.properties?.onboarding_date || "",
-          geometry: f.geometry,
-          source_file: file.name,
-        }));
-
-        setProgress(100);
-      }
-
-      /* ---------- KML ---------- */
-      else if (file.name.endsWith(".kml")) {
-        setMessage("🗺 Reading KML...");
-        const text = await file.text();
-        rows = parseKMLText(text, file.name);
-        setFileCount(1);
-        setProgress(100);
+      if (file.name.endsWith(".kml")) {
+        rows = parseKML(text, file.name);
+      } else if (file.name.endsWith(".geojson") || file.name.endsWith(".json")) {
+        rows = parseGeoJSON(text, file.name);
       } else {
-        throw new Error("Only .kml or .zip supported");
+        throw new Error("Only .kml or .geojson supported");
       }
 
-      const valid = [];
-      const invalid = [];
+      const validRows = rows.filter(validateRow);
+      const invalidRows = rows.filter((r) => !validateRow(r));
 
-      rows.forEach((row) => {
-        const { isValid } = validateRow(row);
-        isValid ? valid.push(row) : invalid.push(row);
-      });
-
-      setCorrectedRows(valid);
-      setIncorrectRows(invalid);
-      setParsedData(valid);
+      setCorrectedRows(validRows);
+      setIncorrectRows(invalidRows);
+      setProgress(100);
 
       setMessage(
-        `✅ Parsed ${rows.length} parcels | Valid: ${valid.length} | Invalid: ${invalid.length}`
+        `✅ Parsed ${rows.length} parcels | Valid: ${validRows.length} | Invalid: ${invalidRows.length}`
       );
     } catch (err) {
-      console.error(err);
       setMessage(`❌ ${err.message}`);
     }
   };
 
-  /* ================= EDIT INVALID ================= */
-  const handleEdit = (rowIndex, field, value) => {
+  const handleReset = () => {
+    setFile(null);
+    setCorrectedRows([]);
+    setIncorrectRows([]);
+    setMessage("");
+    setProgress(0);
+    setFileCount(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleEdit = (index, field, value) => {
     const updated = [...incorrectRows];
-    updated[rowIndex][field] = value;
+    updated[index][field] = value === "" ? null : value;
     setIncorrectRows(updated);
   };
 
   const approveRow = (index) => {
     const row = incorrectRows[index];
-    const { isValid } = validateRow(row);
-
-    if (!isValid) {
-      setMessage("❌ Row still invalid");
-      return;
+    if (validateRow(row)) {
+      setCorrectedRows([...correctedRows, row]);
+      setIncorrectRows(incorrectRows.filter((_, i) => i !== index));
+    } else {
+      alert("Row still invalid!");
     }
-
-    const updatedIncorrect = incorrectRows.filter((_, i) => i !== index);
-    const updatedCorrected = [...correctedRows, row];
-
-    setIncorrectRows(updatedIncorrect);
-    setCorrectedRows(updatedCorrected);
-    setParsedData(updatedCorrected);
   };
 
-  /* ================= SEND TO DB ================= */
   const handleSendToDB = async () => {
-    if (!parsedData.length) return;
+    if (!correctedRows.length) return;
 
     setUploading(true);
-    setMessage("Uploading to database...");
+    setMessage("🚀 Bulk Uploading...");
 
     try {
       const res = await fetch(
@@ -187,16 +179,14 @@ const Landparceldata = () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(parsedData),
+          body: JSON.stringify(correctedRows),
         }
       );
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || "Upload failed");
+      if (!res.ok) throw new Error(result.message);
 
-      setMessage(
-        `✅ Uploaded | Inserted: ${result.inserted} | Failed: ${result.failed}`
-      );
+      setMessage(`✅ Processed: ${result.processed} | Failed: ${result.failed}`);
     } catch (err) {
       setMessage(`❌ ${err.message}`);
     } finally {
@@ -204,22 +194,14 @@ const Landparceldata = () => {
     }
   };
 
-  const columns =
-    correctedRows.length > 0
-      ? Object.keys(correctedRows[0])
-      : incorrectRows.length > 0
-      ? Object.keys(incorrectRows[0])
-      : [];
-
-  /* ================= UI (UNCHANGED) ================= */
   return (
     <div className="kml-upload-container">
-      <h2>Land Parcel Data Upload (.kml / .zip)</h2>
+      <h2>Land Parcel Data Upload (.kml / .geojson)</h2>
 
       <div className="file-action-row">
         <input
           type="file"
-          accept=".kml,.zip"
+          accept=".kml,.geojson,.json"
           onChange={handleFileChange}
           ref={fileInputRef}
         />
@@ -243,17 +225,13 @@ const Landparceldata = () => {
         <div className="progress-wrapper">
           <p>📂 Files: {fileCount}</p>
           <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
           <p>{progress}%</p>
         </div>
       )}
 
       <div className="stack-container">
-        {/* VALID */}
         <div className="box green">
           <h3>✅ Valid Data</h3>
 
@@ -266,9 +244,7 @@ const Landparceldata = () => {
                 {correctedRows.map((row, i) => (
                   <tr key={i}>
                     {columns.map((c) => (
-                      <td key={c}>
-                        {c === "geometry" ? "Polygon" : String(row[c])}
-                      </td>
+                      <td key={c}>{c === "geom" ? "Polygon" : row[c] ?? null}</td>
                     ))}
                   </tr>
                 ))}
@@ -279,7 +255,7 @@ const Landparceldata = () => {
           <button
             className="send-db-btn"
             onClick={handleSendToDB}
-            disabled={uploading || !parsedData.length}
+            disabled={uploading || !correctedRows.length}
           >
             {uploading ? "Uploading..." : "2️⃣ Send to Database"}
           </button>
@@ -287,7 +263,6 @@ const Landparceldata = () => {
           {message && <p className="upload-message">{message}</p>}
         </div>
 
-        {/* INVALID */}
         <div className="box red">
           <h3>❌ Incorrect Data (Edit & Approve)</h3>
 
@@ -309,7 +284,7 @@ const Landparceldata = () => {
                     <tr key={i}>
                       {columns.map((c) => (
                         <td key={c}>
-                          {c === "geometry" ? (
+                          {c === "geom" ? (
                             "Invalid Geometry"
                           ) : (
                             <input
