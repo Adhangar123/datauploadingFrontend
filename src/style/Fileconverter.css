@@ -1,0 +1,203 @@
+/* =========================
+   Main Container (Background Same as Dashboard)
+========================= */
+.file-converter-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+
+  /* Background Image + Overlay */
+  background: linear-gradient(
+      rgba(0, 0, 0, 0.453),
+      rgba(5, 24, 62, 0.479)
+    ),
+    url('/img/8thBg.jpg');
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  min-height: 85.6vh;
+  padding: 50px 30px;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* =========================
+   Page Title
+========================= */
+.main-title {
+  text-align: center;
+  margin-bottom: 40px;
+  color: #ffffff;
+  margin-top: 50px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* =========================
+   Grid Layout
+========================= */
+.converter-grid {
+  width: 100%;
+  max-width: 1200px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 25px;
+}
+
+/* =========================
+   Individual Converter Card
+========================= */
+.converter-card {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  transition: all 0.3s ease;
+}
+
+.converter-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
+}
+
+/* =========================
+   Card Headings
+========================= */
+.converter-card h3 {
+  margin-bottom: 20px;
+  font-size: 18px;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+/* =========================
+   File Input Styling
+========================= */
+.converter-card input[type="file"] {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  font-size: 14px;
+  background: #f9fafb;
+  transition: 0.3s;
+}
+
+.converter-card input[type="file"]:hover {
+  border-color: #2563eb;
+}
+
+/* =========================
+   Old Single Card Style (If Needed)
+========================= */
+.file-converter-card {
+  background: white;
+  padding: 40px;
+  width: 400px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  text-align: center;
+  transition: 0.3s ease-in-out;
+}
+
+.file-converter-card:hover {
+  transform: translateY(-5px);
+}
+
+.file-input {
+  margin-bottom: 15px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.convert-button {
+  width: 100%;
+  padding: 12px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.convert-button:hover {
+  background: #1d4ed8;
+}
+
+.convert-button:active {
+  transform: scale(0.98);
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 768px) {
+  .main-title {
+    font-size: 22px;
+  }
+
+  .converter-card {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 480px) {
+  .file-converter-container {
+    padding: 30px 15px;
+  }
+
+  .converter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.convert-btn {
+  margin-top: 15px;
+  padding: 10px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+  color: white;
+}
+
+.csv-btn {
+  background: #16a34a;
+}
+.csv-btn:hover {
+  background: #15803d;
+}
+
+.xlsx-btn {
+  background: #2563eb;
+}
+.xlsx-btn:hover {
+  background: #1d4ed8;
+}
+
+.kml-btn {
+  background: #f97316;
+}
+.kml-btn:hover {
+  background: #ea580c;
+}
+
+.geojson-btn {
+  background: #9333ea;
+}
+.geojson-btn:hover {
+  background: #7e22ce;
+}

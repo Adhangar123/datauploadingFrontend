@@ -48,6 +48,14 @@ const Navbar = () => {
         >
           Help
         </motion.button>
+        <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`navbar-button ${isActive("/Fileconverter") ? "active" : ""}`}
+            onClick={() => navigate("/Fileconverter")}
+          >
+            File Converter
+          </motion.button>
       </div>
     </header>
   );
