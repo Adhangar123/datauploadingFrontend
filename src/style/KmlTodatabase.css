@@ -173,9 +173,9 @@ tbody tr:hover {
 
 /* ================= ACTION BUTTONS ================= */
 .send-db-btn {
-  margin-top: 16px;
-  padding: 12px 20px;
-  width: min(100%, 320px);
+  margin-top:16px;
+  padding: 6px 10px;
+  width: min(100%, 200px);
   background-color: #1e88e5;
   color: #fff;
   font-size: 15px;

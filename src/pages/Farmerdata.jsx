@@ -294,7 +294,7 @@ const FarmerDataUpload = () => {
             </table>
           </div>
 
-          <button onClick={handleSendToDB} disabled={uploading}>
+          <button className="send-db-btn" onClick={handleSendToDB} disabled={uploading}>
             {uploading ? "Uploading..." : "2️⃣ Send to Database"}
           </button>
 
