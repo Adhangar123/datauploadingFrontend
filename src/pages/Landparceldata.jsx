@@ -5,28 +5,62 @@ import { kml } from "@tmcw/togeojson";
 /* =========================
    FIELD TYPE VALIDATION
 ========================= */
-const NUMBER_FIELDS = ["OBJECTID", "id"]; // numeric fields
+const NUMBER_FIELDS = [
+  "OBJECTID",
+  "id",
+  "area_ha",
+  "shape_length",
+  "shape_area",
+  "Shape_Length",
+  "Shape_Area",
+  "planting_year",
+  "saplings_count",
+];
+
 const STRING_FIELDS = [
-  "project_id",
   "parcel_id",
-  "farmer_id",
+  "project_id",
   "farmer_name",
   "onboarding_date",
   "drone_image_url",
   "drone_tile_url",
-]; // string fields
+  "species_planted",
+  "intercropping_grazing",
+  "tree_spacing_ft",
+];
 
 const validateRow = (row) => {
-  // Number fields should be numbers or null
+  if (!row.geom) return false;
+
   for (let field of NUMBER_FIELDS) {
-    if (row[field] !== null && row[field] !== undefined && isNaN(Number(row[field]))) {
+    if (
+      row[field] !== null &&
+      row[field] !== undefined &&
+      row[field] !== "" &&
+      isNaN(Number(row[field]))
+    ) {
       return false;
     }
   }
 
-  // String fields should be strings or null
   for (let field of STRING_FIELDS) {
-    if (row[field] !== null && row[field] !== undefined && typeof row[field] !== "string") {
+    if (
+      row[field] !== null &&
+      row[field] !== undefined &&
+      row[field] !== "" &&
+      typeof row[field] !== "string"
+    ) {
+      return false;
+    }
+  }
+
+  // farmer_id → number OR string allowed, but convert to string
+  if (
+    row.farmer_id !== null &&
+    row.farmer_id !== undefined &&
+    row.farmer_id !== ""
+  ) {
+    if (typeof row.farmer_id !== "string" && isNaN(Number(row.farmer_id))) {
       return false;
     }
   }
@@ -38,20 +72,36 @@ const validateRow = (row) => {
    PARSE KML / GEOJSON
 ========================= */
 const normalizeRow = (f, i, fileName) => ({
-  project_id: f.properties?.project_id ?? null,
   parcel_id: f.properties?.parcel_id ?? `parcel_${i + 1}`,
+  project_id: f.properties?.project_id ?? null,
   OBJECTID: f.properties?.OBJECTID ?? null,
   id: f.properties?.id ?? null,
-  farmer_id: f.properties?.farmer_id ?? null,
+
+  // ✅ Force farmer_id as string
+  farmer_id:
+    f.properties?.farmer_id !== undefined && f.properties?.farmer_id !== null
+      ? String(f.properties.farmer_id)
+      : null,
+
   farmer_name: f.properties?.farmer_name ?? null,
   onboarding_date: f.properties?.onboarding_date ?? null,
+  geom: f.geometry ?? null,
+  area_ha: f.properties?.area_ha ?? null,
   drone_survey:
     f.properties?.drone_survey === true ||
     f.properties?.drone_survey === "true" ||
     false,
   drone_image_url: f.properties?.drone_image_url ?? null,
+  shape_length: f.properties?.shape_length ?? null,
+  shape_area: f.properties?.shape_area ?? null,
   drone_tile_url: f.properties?.drone_tile_url ?? null,
-  geom: f.geometry ?? null,
+  Shape_Length: f.properties?.Shape_Length ?? null,
+  Shape_Area: f.properties?.Shape_Area ?? null,
+  planting_year: f.properties?.planting_year ?? null,
+  species_planted: f.properties?.species_planted ?? null,
+  saplings_count: f.properties?.saplings_count ?? null,
+  intercropping_grazing: f.properties?.intercropping_grazing ?? null,
+  tree_spacing_ft: f.properties?.tree_spacing_ft ?? null,
   source_file: fileName,
 });
 
@@ -83,17 +133,27 @@ const Landparceldata = () => {
   const fileInputRef = useRef(null);
 
   const columns = [
-    "project_id",
     "parcel_id",
+    "project_id",
     "OBJECTID",
     "id",
     "farmer_id",
     "farmer_name",
     "onboarding_date",
+    "geom",
+    "area_ha",
     "drone_survey",
     "drone_image_url",
+    "shape_length",
+    "shape_area",
     "drone_tile_url",
-    "geom",
+    "Shape_Length",
+    "Shape_Area",
+    "planting_year",
+    "species_planted",
+    "saplings_count",
+    "intercropping_grazing",
+    "tree_spacing_ft",
   ];
 
   const handleFileChange = (e) => {
@@ -179,7 +239,12 @@ const Landparceldata = () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(correctedRows),
+          body: JSON.stringify(
+            correctedRows.map((r) => ({
+              ...r,
+              farmer_id: r.farmer_id ? String(r.farmer_id) : null,
+            }))
+          ),
         }
       );
 
@@ -289,9 +354,7 @@ const Landparceldata = () => {
                           ) : (
                             <input
                               value={row[c] ?? ""}
-                              onChange={(e) =>
-                                handleEdit(i, c, e.target.value)
-                              }
+                              onChange={(e) => handleEdit(i, c, e.target.value)}
                             />
                           )}
                         </td>
