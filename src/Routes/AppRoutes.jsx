@@ -7,6 +7,7 @@ import Landparceldata from "../pages/Landparceldata";
 import ProtectedRoute from "../Auth/ProtectedRoute";
 import Help from "../pages/Help";
 import Fileconverter from "../pages/Fileconverter";
+import Visualization from "../pages/Visualization";
 
 const AppRoutes = () => (
   <Routes>
@@ -21,6 +22,8 @@ const AppRoutes = () => (
     <Route element={<ProtectedRoute />}>
       <Route path="/farmer-data" element={<Farmerdata />} />
       <Route path="/land-parcel-data" element={<Landparceldata />} />
+      <Route path="/Visualization" element={<Visualization />} />
+
     </Route>
   </Routes>
 );

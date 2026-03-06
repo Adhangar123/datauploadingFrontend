@@ -53,13 +53,20 @@ const Dashboard = () => {
             <h2>Land Parcel Data</h2>
             <p>Upload land parcel boundaries, KML/GeoJSON files, and metadata.</p>
           </div>
-
           <div
             className="dashboard-card cra"
           >
             <div className="card-icon">📊</div>
             <h2>CRA Data</h2>
             <p>Upload CRA datasets, KML/GeoJSON files, and metadata.</p>
+          </div>
+           <div
+            className="dashboard-card cra"
+            onClick={() => handleCardClick("/visualization")}
+          >
+            <div className="card-icon">📊</div>
+            <h2>Data Visualization</h2>
+            <p>View farmer data insights, charts, and analytics dashboards.</p>
           </div>
         </div>
       </div>
