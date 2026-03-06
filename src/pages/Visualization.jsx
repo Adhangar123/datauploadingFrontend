@@ -1,324 +1,403 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import CountUp from "react-countup";
+
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Legend
+BarChart,
+Bar,
+XAxis,
+YAxis,
+Tooltip,
+CartesianGrid,
+PieChart,
+Pie,
+Cell,
+ResponsiveContainer,
+Legend
 } from "recharts";
 
 import "../style/Visualization.css";
 
 const API_URL =
-  "https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata";
+"https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata?limit=5000";
 
-const COLORS = ["#4CAF50", "#2196F3", "#FF9800", "#E91E63", "#9C27B0"];
+const COLORS = ["#4CAF50","#2196F3","#FF9800","#E91E63","#9C27B0","#00BCD4"];
 
 const Visualization = () => {
 
-  const [data, setData] = useState([]);
-  const [allData, setAllData] = useState([]);
+const [data,setData] = useState([]);
+const [allData,setAllData] = useState([]);
 
-  const [stateData, setStateData] = useState([]);
-  const [districtData, setDistrictData] = useState([]);
+const [stateChart,setStateChart] = useState([]);
+const [districtChart,setDistrictChart] = useState([]);
+const [villageChart,setVillageChart] = useState([]);
 
-  const [projects, setProjects] = useState([]);
-  const [states, setStates] = useState([]);
-  const [districts, setDistricts] = useState([]);
-  const [gps, setGps] = useState([]);
+const [filters,setFilters] = useState({
+project:"",
+state:"",
+district:"",
+gp:""
+});
 
-  const [filters, setFilters] = useState({
-    project: "",
-    state: "",
-    district: "",
-    gp: "",
-    from_date: "",
-    to_date: ""
-  });
+const [projects,setProjects] = useState([]);
+const [states,setStates] = useState([]);
+const [districts,setDistricts] = useState([]);
+const [gps,setGps] = useState([]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+const [stats,setStats] = useState({
+farmers:0,
+states:0,
+districts:0,
+projects:0
+});
 
-  const fetchData = async () => {
-    try {
+useEffect(()=>{
+fetchData();
+},[]);
 
-      const res = await axios.get(API_URL);
+const fetchData = async ()=>{
 
-      const farmers = res.data.data;
+try{
 
-      setAllData(farmers);
-      setData(farmers);
+const res = await axios.get(API_URL);
 
-      processCharts(farmers);
+const farmers = res.data.data;
 
-      setProjects([...new Set(farmers.map(f => f.project_code))]);
-      setStates([...new Set(farmers.map(f => f.state))]);
-      setDistricts([...new Set(farmers.map(f => f.district))]);
-      setGps([...new Set(farmers.map(f => f.blocks))]);
+setAllData(farmers);
+setData(farmers);
 
-    } catch (error) {
-      console.error(error);
-    }
-  };
+generateStats(farmers);
+generateDropdowns(farmers);
+generateCharts(farmers);
 
-  const processCharts = (farmers) => {
+}catch(err){
+console.error(err);
+}
 
-    const stateMap = {};
-    const districtMap = {};
+};
 
-    farmers.forEach((f) => {
+const generateStats = (farmers)=>{
 
-      if (f.state) {
-        stateMap[f.state] = (stateMap[f.state] || 0) + 1;
-      }
+setStats({
+farmers:farmers.length,
+states:new Set(farmers.map(f=>f.state)).size,
+districts:new Set(farmers.map(f=>f.district)).size,
+projects:new Set(farmers.map(f=>f.project_code)).size
+});
 
-      if (f.district) {
-        districtMap[f.district] = (districtMap[f.district] || 0) + 1;
-      }
+};
 
-    });
+const generateDropdowns = (farmers)=>{
 
-    setStateData(
-      Object.keys(stateMap).map((key) => ({
-        name: key,
-        value: stateMap[key]
-      }))
-    );
+setProjects([...new Set(farmers.map(f=>f.project_code))]);
+setStates([...new Set(farmers.map(f=>f.state))]);
+setDistricts([...new Set(farmers.map(f=>f.district))]);
+setGps([...new Set(farmers.map(f=>f.blocks))]);
 
-    setDistrictData(
-      Object.keys(districtMap).map((key) => ({
-        name: key,
-        value: districtMap[key]
-      }))
-    );
-  };
+};
 
-  const handleFilter = (e) => {
+const generateCharts = (farmers)=>{
 
-    const { name, value } = e.target;
+const stateMap={};
+const districtMap={};
+const villageMap={};
 
-    const newFilters = { ...filters, [name]: value };
+farmers.forEach(f=>{
 
-    setFilters(newFilters);
+if(f.state){
+stateMap[f.state]=(stateMap[f.state]||0)+1;
+}
 
-    applyFilters(newFilters);
-  };
+if(f.district){
+districtMap[f.district]=(districtMap[f.district]||0)+1;
+}
 
-  const applyFilters = (f) => {
+if(f.village){
+villageMap[f.village]=(villageMap[f.village]||0)+1;
+}
 
-    let filtered = allData;
+});
 
-    if (f.project) {
-      filtered = filtered.filter(x => x.project_code === f.project);
-    }
+setStateChart(
+Object.keys(stateMap).map(key=>({
+name:key,
+value:stateMap[key]
+}))
+);
 
-    if (f.state) {
-      filtered = filtered.filter(x => x.state === f.state);
-    }
+setDistrictChart(
+Object.keys(districtMap).map(key=>({
+name:key,
+value:districtMap[key]
+}))
+);
 
-    if (f.district) {
-      filtered = filtered.filter(x => x.district === f.district);
-    }
+const sortedVillages =
+Object.keys(villageMap)
+.map(v=>({name:v,value:villageMap[v]}))
+.sort((a,b)=>b.value-a.value)
+.slice(0,10);
 
-    if (f.gp) {
-      filtered = filtered.filter(x => x.blocks === f.gp);
-    }
+setVillageChart(sortedVillages);
 
-    setData(filtered);
-    processCharts(filtered);
-  };
+};
 
-  const resetFilters = () => {
-    setFilters({
-      project: "",
-      state: "",
-      district: "",
-      gp: "",
-      from_date: "",
-      to_date: ""
-    });
+const handleFilter=(e)=>{
 
-    setData(allData);
-    processCharts(allData);
-  };
+const {name,value}=e.target;
 
- return (
-  <div className="visualization-container">
+const newFilters={...filters,[name]:value};
 
-    <h2 className="dashboard-title">Farmer Data Visualization</h2>
+setFilters(newFilters);
 
-    {/* CHARTS */}
+applyFilters(newFilters);
 
-    <div className="charts-grid">
+};
 
-      <div className="chart-card">
-        <h3>Farmers by State</h3>
+const applyFilters=(f)=>{
 
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={stateData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name"/>
-            <YAxis/>
-            <Tooltip/>
-            <Bar dataKey="value" fill="#4CAF50"/>
-          </BarChart>
-        </ResponsiveContainer>
+let filtered=[...allData];
 
-      </div>
+if(f.project){
+filtered=filtered.filter(x=>x.project_code===f.project);
+}
 
-      <div className="chart-card">
+if(f.state){
+filtered=filtered.filter(x=>x.state===f.state);
+}
 
-        <h3>Farmers by District</h3>
+if(f.district){
+filtered=filtered.filter(x=>x.district===f.district);
+}
 
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
+if(f.gp){
+filtered=filtered.filter(x=>x.blocks===f.gp);
+}
 
-            <Pie
-              data={districtData}
-              dataKey="value"
-              nameKey="name"
-              outerRadius={100}
-              label
-            >
-              {districtData.map((entry, index) => (
-                <Cell key={index} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
+setData(filtered);
 
-            <Legend/>
-            <Tooltip/>
+generateCharts(filtered);
+generateStats(filtered);
 
-          </PieChart>
-        </ResponsiveContainer>
+};
 
-      </div>
+const resetFilters=()=>{
 
-    </div>
+setFilters({
+project:"",
+state:"",
+district:"",
+gp:""
+});
+
+setData(allData);
+generateCharts(allData);
+generateStats(allData);
+
+};
+
+return(
+
+<div className="visualization-container">
+
+<h2 className="dashboard-title">Farmer Dashboard</h2>
+
+{/* KPI CARDS */}
+
+<div className="kpi-grid">
+
+<div className="kpi-card">
+<h4>Total Farmers</h4>
+<h2><CountUp end={stats.farmers} duration={2}/></h2>
+</div>
+
+<div className="kpi-card">
+<h4>States</h4>
+<h2><CountUp end={stats.states} duration={2}/></h2>
+</div>
+
+<div className="kpi-card">
+<h4>Districts</h4>
+<h2><CountUp end={stats.districts} duration={2}/></h2>
+</div>
+
+<div className="kpi-card">
+<h4>Projects</h4>
+<h2><CountUp end={stats.projects} duration={2}/></h2>
+</div>
+
+</div>
+{/* CHARTS */}
+
+<div className="charts-grid">
+
+<div className="chart-card">
+
+<h3>Farmers by State</h3>
+
+<ResponsiveContainer width="100%" height={300}>
+<BarChart data={stateChart}>
+<CartesianGrid strokeDasharray="3 3"/>
+<XAxis dataKey="name"/>
+<YAxis/>
+<Tooltip/>
+<Bar dataKey="value" fill="#4CAF50"/>
+</BarChart>
+</ResponsiveContainer>
+
+</div>
+
+<div className="chart-card">
+
+<h3>Farmers by District</h3>
+
+<ResponsiveContainer width="100%" height={300}>
+<PieChart>
+
+<Pie
+data={districtChart}
+dataKey="value"
+nameKey="name"
+outerRadius={110}
+label
+>
+
+{districtChart.map((entry,index)=>(
+<Cell key={index} fill={COLORS[index%COLORS.length]}/>
+))}
+
+</Pie>
+
+<Legend/>
+<Tooltip/>
+
+</PieChart>
+</ResponsiveContainer>
+
+</div>
+
+<div className="chart-card">
+
+<h3>Top 10 Villages</h3>
+
+<ResponsiveContainer width="100%" height={300}>
+<BarChart data={villageChart}>
+<CartesianGrid strokeDasharray="3 3"/>
+<XAxis dataKey="name"/>
+<YAxis/>
+<Tooltip/>
+<Bar dataKey="value" fill="#2196F3"/>
+</BarChart>
+</ResponsiveContainer>
+
+</div>
+
+</div>
 {/* FILTERS */}
 
-    <div className="filters-container">
+<div className="filters-container">
 
-      <div className="filter-item">
-        <label>PROJECT</label>
-        <select name="project" value={filters.project} onChange={handleFilter}>
-          <option value="">All Projects</option>
-          {projects.map((p, i) => (
-            <option key={i} value={p}>{p}</option>
-          ))}
-        </select>
-      </div>
+<div className="filter-item">
+<label>PROJECT</label>
+<select name="project" value={filters.project} onChange={handleFilter}>
+<option value="">All Projects</option>
+{projects.map((p,i)=>(
+<option key={i} value={p}>{p}</option>
+))}
+</select>
+</div>
 
-      <div className="filter-item">
-        <label>FROM DATE</label>
-        <input
-          type="date"
-          name="from_date"
-          value={filters.from_date}
-          onChange={handleFilter}
-        />
-      </div>
+<div className="filter-item">
+<label>FROM DATE</label>
+<input type="date"/>
+</div>
 
-      <div className="filter-item">
-        <label>TO DATE</label>
-        <input
-          type="date"
-          name="to_date"
-          value={filters.to_date}
-          onChange={handleFilter}
-        />
-      </div>
+<div className="filter-item">
+<label>TO DATE</label>
+<input type="date"/>
+</div>
 
-      <div className="filter-item">
-        <label>STATE</label>
-        <select name="state" value={filters.state} onChange={handleFilter}>
-          <option value="">All States</option>
-          {states.map((s, i) => (
-            <option key={i} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
+<div className="filter-item">
+<label>STATE</label>
+<select name="state" value={filters.state} onChange={handleFilter}>
+<option value="">All States</option>
+{states.map((s,i)=>(
+<option key={i} value={s}>{s}</option>
+))}
+</select>
+</div>
 
-      <div className="filter-item">
-        <label>DISTRICT</label>
-        <select name="district" value={filters.district} onChange={handleFilter}>
-          <option value="">All Districts</option>
-          {districts.map((d, i) => (
-            <option key={i} value={d}>{d}</option>
-          ))}
-        </select>
-      </div>
+<div className="filter-item">
+<label>DISTRICT</label>
+<select name="district" value={filters.district} onChange={handleFilter}>
+<option value="">All Districts</option>
+{districts.map((d,i)=>(
+<option key={i} value={d}>{d}</option>
+))}
+</select>
+</div>
 
-      <div className="filter-item">
-        <label>GP/IP</label>
-        <select name="gp" value={filters.gp} onChange={handleFilter}>
-          <option value="">All GP/IPs</option>
-          {gps.map((g, i) => (
-            <option key={i} value={g}>{g}</option>
-          ))}
-        </select>
-      </div>
+<div className="filter-item">
+<label>GP/IP</label>
+<select name="gp" value={filters.gp} onChange={handleFilter}>
+<option value="">All GP/IPs</option>
+{gps.map((g,i)=>(
+<option key={i} value={g}>{g}</option>
+))}
+</select>
+</div>
 
-      <button className="reset-btn" onClick={resetFilters}>⟳</button>
+<button className="reset-btn" onClick={resetFilters}>⟳</button>
 
-    </div>
-    {/* TABLE */}
+</div>
+{/* TABLE */}
 
-    <div className="table-card">
+<div className="table-card">
 
-      <h3>Farmer Data</h3>
+<h3>Farmer Data</h3>
 
-      <div className="table-scroll">
+<div className="table-scroll">
 
-        <table className="farmer-table">
+<table className="farmer-table">
 
-          <thead>
-            <tr>
-              <th>Farmer ID</th>
-              <th>Name</th>
-              <th>State</th>
-              <th>District</th>
-              <th>Village</th>
-              <th>Project Code</th>
-            </tr>
-          </thead>
+<thead>
 
-          <tbody>
-            {data.length > 0 ? (
-              data.map((farmer, index) => (
-                <tr key={index}>
-                  <td>{farmer.farmer_id}</td>
-                  <td>{farmer.farmer_name}</td>
-                  <td>{farmer.state}</td>
-                  <td>{farmer.district}</td>
-                  <td>{farmer.village}</td>
-                  <td>{farmer.project_code}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" style={{ textAlign: "center" }}>
-                  No Data Found
-                </td>
-              </tr>
-            )}
-          </tbody>
+<tr>
+<th>Farmer ID</th>
+<th>Name</th>
+<th>State</th>
+<th>District</th>
+<th>Village</th>
+<th>Project</th>
+</tr>
 
-        </table>
+</thead>
 
-      </div>
+<tbody>
 
-    </div>
+{data.map((f,i)=>(
+<tr key={i}>
+<td>{f.farmer_id}</td>
+<td>{f.farmer_name}</td>
+<td>{f.state}</td>
+<td>{f.district}</td>
+<td>{f.village}</td>
+<td>{f.project_code}</td>
+</tr>
+))}
 
-  </div>
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
 );
+
 };
 
 export default Visualization;

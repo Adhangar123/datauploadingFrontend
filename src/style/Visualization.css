@@ -108,3 +108,40 @@ font-weight:600;
   padding:10px;
   border-bottom:1px solid #eee;
 }
+.kpi-grid{
+display:grid;
+grid-template-columns:repeat(4,1fr);
+gap:20px;
+margin-bottom:25px;
+}
+
+.kpi-card{
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 3px 10px rgba(0,0,0,0.1);
+text-align:center;
+}
+
+.kpi-card h4{
+color:#666;
+}
+
+.kpi-card h2{
+color:#2E7D32;
+font-size:28px;
+}
+
+.charts-grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:20px;
+margin-top:20px;
+}
+
+.chart-card{
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 3px 10px rgba(0,0,0,0.1);
+}
