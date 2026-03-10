@@ -6,12 +6,14 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { AuthProvider } from "./context/AuthContext";
 import "./App.css";
+import BirdFlock from "./components/BirdFlock";
 
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <div className="app-layout">
+          <BirdFlock />
           <Navbar />
           <main className="page-content">
             <AppRoutes />
