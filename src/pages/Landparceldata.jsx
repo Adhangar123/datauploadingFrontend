@@ -298,13 +298,8 @@ const Landparceldata = () => {
             1️⃣ Read & Validate File
           </button>
 
-          <button
-            onClick={handleReset}
-            className="reset-btn outline"
-            disabled={!file && !correctedRows.length && !incorrectRows.length}
-          >
-            🔄 Reset
-          </button>
+          <button onClick={handleReset}>🔄 Reset</button>
+
         </div>
       </div>
 
