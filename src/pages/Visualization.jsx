@@ -21,6 +21,9 @@ import "../style/Visualization.css";
 const API_URL =
 "https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata?limit=5000";
 
+const UPDATE_API =
+"https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata/update/";
+
 const COLORS = ["#4CAF50","#2196F3","#FF9800","#E91E63","#9C27B0","#00BCD4"];
 
 const Visualization = () => {
@@ -50,6 +53,11 @@ states:0,
 districts:0,
 projects:0
 });
+
+/* EDIT STATE */
+
+const [editRow,setEditRow] = useState(null);
+const [editData,setEditData] = useState({});
 
 useEffect(()=>{
 fetchData();
@@ -193,6 +201,53 @@ gp:""
 setData(allData);
 generateCharts(allData);
 generateStats(allData);
+
+};
+
+/* EDIT FUNCTIONS */
+
+const handleEdit=(farmer)=>{
+
+setEditRow(farmer.farmer_id);
+
+setEditData({
+farmer_name:farmer.farmer_name,
+state:farmer.state,
+district:farmer.district,
+village:farmer.village,
+project_code:farmer.project_code
+});
+
+};
+
+const handleEditChange=(e)=>{
+
+setEditData({
+...editData,
+[e.target.name]:e.target.value
+});
+
+};
+
+const handleUpdate = async(id)=>{
+
+try{
+
+await axios.put(`${UPDATE_API}${id}`,editData);
+
+alert("Farmer Updated Successfully");
+
+setEditRow(null);
+
+fetchData();
+
+}catch(err){
+
+console.error(err);
+
+alert("Update Failed");
+
+}
 
 };
 
@@ -350,6 +405,7 @@ label
 <button className="reset-btn" onClick={resetFilters}>⟳</button>
 
 </div>
+
 {/* TABLE */}
 
 <div className="table-card">
@@ -369,6 +425,7 @@ label
 <th>District</th>
 <th>Village</th>
 <th>Project</th>
+<th>Action</th>
 </tr>
 
 </thead>
@@ -376,14 +433,117 @@ label
 <tbody>
 
 {data.map((f,i)=>(
+
 <tr key={i}>
+
 <td>{f.farmer_id}</td>
-<td>{f.farmer_name}</td>
-<td>{f.state}</td>
-<td>{f.district}</td>
-<td>{f.village}</td>
-<td>{f.project_code}</td>
+
+<td>
+
+{editRow===f.farmer_id ? (
+
+<input
+name="farmer_name"
+value={editData.farmer_name}
+onChange={handleEditChange}
+/>
+
+) : (
+f.farmer_name
+)}
+
+</td>
+
+<td>
+
+{editRow===f.farmer_id ? (
+
+<input
+name="state"
+value={editData.state}
+onChange={handleEditChange}
+/>
+
+) : (
+f.state
+)}
+
+</td>
+
+<td>
+
+{editRow===f.farmer_id ? (
+
+<input
+name="district"
+value={editData.district}
+onChange={handleEditChange}
+/>
+
+) : (
+f.district
+)}
+
+</td>
+
+<td>
+
+{editRow===f.farmer_id ? (
+
+<input
+name="village"
+value={editData.village}
+onChange={handleEditChange}
+/>
+
+) : (
+f.village
+)}
+
+</td>
+
+<td>
+
+{editRow===f.farmer_id ? (
+
+<input
+name="project_code"
+value={editData.project_code}
+onChange={handleEditChange}
+/>
+
+) : (
+f.project_code
+)}
+
+</td>
+
+<td>
+
+{editRow===f.farmer_id ? (
+
+<button
+className="save-btn"
+onClick={()=>handleUpdate(f.farmer_id)}
+>
+Save
+</button>
+
+) : (
+
+<button
+className="edit-btn"
+onClick={()=>handleEdit(f)}
+>
+Edit
+</button>
+
+)}
+
+</td>
+
 </tr>
+
 ))}
 
 </tbody>
@@ -395,7 +555,6 @@ label
 </div>
 
 </div>
-
 );
 
 };
