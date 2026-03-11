@@ -4,12 +4,7 @@ import "../style/BirdFlock.css";
 function BirdFlock() {
 
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
-
-  const [birds, setBirds] = useState([
-    { x: 0, y: 0 },
-    { x: 0, y: 0 },
-    { x: 0, y: 0 }
-  ]);
+  const [bird, setBird] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const move = (e) => {
@@ -25,27 +20,10 @@ function BirdFlock() {
 
     const interval = setInterval(() => {
 
-      setBirds((prev) => {
-
-        const newBirds = [...prev];
-
-        newBirds[0] = {
-          x: prev[0].x + (mouse.x - prev[0].x) * 0.2,
-          y: prev[0].y + (mouse.y - prev[0].y) * 0.2
-        };
-
-        newBirds[1] = {
-          x: prev[1].x + (newBirds[0].x - prev[1].x) * 0.2,
-          y: prev[1].y + (newBirds[0].y - prev[1].y) * 0.2
-        };
-
-        newBirds[2] = {
-          x: prev[2].x + (newBirds[1].x - prev[2].x) * 0.2,
-          y: prev[2].y + (newBirds[1].y - prev[2].y) * 0.2
-        };
-
-        return newBirds;
-      });
+      setBird((prev) => ({
+        x: prev.x + (mouse.x - prev.x) * 0.15,
+        y: prev.y + (mouse.y - prev.y) * 0.15
+      }));
 
     }, 16);
 
@@ -54,20 +32,15 @@ function BirdFlock() {
   }, [mouse]);
 
   return (
-    <>
-      {birds.map((bird, index) => (
-        <img
-          key={index}
-          src="/img/bird_1452405.png"
-          className="bird"
-          style={{
-            left: bird.x,
-            top: bird.y
-          }}
-          alt="bird"
-        />
-      ))}
-    </>
+    <img
+      src="/img/hummingbird.png"
+      className="bird"
+      style={{
+        left: bird.x,
+        top: bird.y
+      }}
+      alt="bird"
+    />
   );
 }
 
