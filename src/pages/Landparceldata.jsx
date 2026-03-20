@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { uploadLandParcelData } from "../api/LandparcelDataApi";
 import "../style/KmlTodatabase.css";
 import { kml } from "@tmcw/togeojson";
 
@@ -252,35 +253,24 @@ const Landparceldata = () => {
     }
   };
 
-  const handleSendToDB = async () => {
-    if (!correctedRows.length) return;
+const handleSendToDB = async () => {
+  if (!correctedRows.length) return;
 
-    setUploading(true);
-    setMessage("🚀 Bulk Uploading...");
+  setUploading(true);
+  setMessage("🚀 Bulk Uploading...");
 
-    try {
-      const res = await fetch(
-        "https://datauploadingbackend-13977221722.asia-south2.run.app/api/land-parcel/upload",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(correctedRows),
-        }
-      );
+  try {
+    const result = await uploadLandParcelData(correctedRows);
 
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message);
-
-      setMessage(
-        `✅ Bulk UPSERT completed | Processed: ${result.processed}`
-      );
-    } catch (err) {
-      setMessage(`❌ ${err.message}`);
-    } finally {
-      setUploading(false);
-    }
-  };
-
+    setMessage(
+      `✅ Bulk UPSERT completed successfully | Processed: ${result.processed}`
+    );
+  } catch (err) {
+    setMessage(`❌ ${err.message}`);
+  } finally {
+    setUploading(false);
+  }
+};
   return (
     <div className="kml-upload-container">
       <h2>Land Parcel Data Upload (.kml / .geojson)</h2>

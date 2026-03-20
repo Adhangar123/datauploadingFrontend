@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { uploadFarmerData } from "../api/FarmerDataApi";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import "../style/KmlTodatabase.css";
@@ -211,47 +212,31 @@ const FarmerDataUpload = () => {
   };
 
   /* ---------------- SEND TO DB ---------------- */
-  const handleSendToDB = async () => {
-    if (!correctedRows.length) return;
+const handleSendToDB = async () => {
+  if (!correctedRows.length) return;
 
-    setUploading(true);
-    setDbError("");
-    setMessage("Uploading...");
+  setUploading(true);
+  setDbError("");
+  setMessage("Uploading...");
 
-    const cleanedData = correctedRows.map((row) => ({
-      ...row,
-      OBJECTID: row.OBJECTID ? Number(row.OBJECTID) : null,
-      id: row.id ? Number(row.id) : null,
-      onboarding_date: row.onboarding_date
-        ? new Date(row.onboarding_date)
-        : null,
-    }));
+  const cleanedData = correctedRows.map((row) => ({
+    ...row,
+    OBJECTID: row.OBJECTID ? Number(row.OBJECTID) : null,
+    id: row.id ? Number(row.id) : null,
+    onboarding_date: row.onboarding_date
+      ? new Date(row.onboarding_date)
+      : null,
+  }));
 
-    try {
-      const res = await fetch(
-        "https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(cleanedData),
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setDbError(data.message || "Database error occurred");
-        return;
-      }
-
-      setMessage("Successfully uploaded!");
-    } catch (err) {
-      setDbError(err.message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
+  try {
+    await uploadFarmerData(cleanedData);
+    setMessage("✅ Successfully uploaded!");
+  } catch (err) {
+    setDbError("❌ " + err.message);
+  } finally {
+    setUploading(false);
+  }
+};
   const columns = ALLOWED_FIELDS;
 
 
