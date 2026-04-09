@@ -29,7 +29,17 @@ const REQUIRED_HEADERS = [
   "farmer_name"
 ];
 
-/* ---------------- UNIVERSAL SANITIZER ---------------- */
+/* ---------------- NAME HELPER ---------------- */
+const parseNames = (value) => {
+  if (!value) return [];
+  return value
+    .toString()
+    .split(",")
+    .map((n) => n.trim())
+    .filter((n) => n !== "");
+};
+
+/* ---------------- SANITIZER ---------------- */
 const sanitizeRow = (row) => {
   const cleaned = {};
 
@@ -41,52 +51,65 @@ const sanitizeRow = (row) => {
       return;
     }
 
+    // 🔥 farmer_name special handling
+    if (key === "farmer_name") {
+      const names = parseNames(rawValue);
+      const unique = [...new Set(names.map(n => n.toLowerCase()))];
+      cleaned[key] = unique.length ? names.join(", ") : null;
+      return;
+    }
+
     const value = rawValue.toString().trim().toLowerCase();
 
-    if (
-      value === "" ||
-      value === "not available" ||
-      value === "na"
-    ) {
-      cleaned[key] = null;
-    } else {
-      cleaned[key] = rawValue;
-    }
+    cleaned[key] =
+      value === "" || value === "not available" || value === "na"
+        ? null
+        : rawValue;
   });
 
   return cleaned;
 };
 
 /* ---------------- VALIDATION ---------------- */
-const validateRow = (row, existingFarmerIds = []) => {
+const validateRow = (row, existingRows = []) => {
   const errors = [];
   const farmerIdPattern = /^[A-Za-z0-9-]+$/;
 
   if (!row.farmer_id) errors.push("farmer_id is required");
-  if (!row.farmer_name) errors.push("farmer_name is required");
   if (!row.project_code) errors.push("project_code is required");
+
+  const names = parseNames(row.farmer_name);
+  if (!names.length) errors.push("farmer_name is required");
 
   if (row.farmer_id && !farmerIdPattern.test(row.farmer_id.trim())) {
     errors.push("farmer_id must be alphanumeric (letters, numbers, dash only)");
   }
 
-  if (existingFarmerIds.includes(row.farmer_id?.trim())) {
-    errors.push("Duplicate farmer_id in file");
+  // 🔥 NEW LOGIC (allow same farmer_id, but prevent exact duplicate name)
+  const duplicate = existingRows.find((r) => {
+    if (r.farmer_id?.trim() !== row.farmer_id?.trim()) return false;
+
+    const existingNames = parseNames(r.farmer_name).map(n => n.toLowerCase());
+    return names.some(n => existingNames.includes(n.toLowerCase()));
+  });
+
+  if (duplicate) {
+    errors.push("Duplicate farmer_id + farmer_name already exists");
   }
 
-  if (row.OBJECTID !== null && row.OBJECTID !== "" && isNaN(Number(row.OBJECTID))) {
+  if (row.OBJECTID && isNaN(Number(row.OBJECTID))) {
     errors.push("OBJECTID must be number");
   }
 
-  if (row.id !== null && row.id !== "" && isNaN(Number(row.id))) {
+  if (row.id && isNaN(Number(row.id))) {
     errors.push("id must be number");
   }
 
-  if (row.plot_number !== null && row.plot_number !== "" && isNaN(Number(row.plot_number))) {
+  if (row.plot_number && isNaN(Number(row.plot_number))) {
     errors.push("plot_number must be number");
   }
 
-  if (row.onboarding_date !== null && row.onboarding_date !== "") {
+  if (row.onboarding_date) {
     const date = new Date(row.onboarding_date);
     if (isNaN(date.getTime())) {
       errors.push("onboarding_date must be valid date");
@@ -129,7 +152,7 @@ const FarmerDataUpload = () => {
   const [incorrectRows, setIncorrectRows] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const [dbError, setDbError] = useState("");   // ✅ NEW ERROR BOX
+  const [dbError, setDbError] = useState("");
   const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -211,34 +234,34 @@ const FarmerDataUpload = () => {
     }
   };
 
-  /* ---------------- SEND TO DB ---------------- */
-const handleSendToDB = async () => {
-  if (!correctedRows.length) return;
+  const handleSendToDB = async () => {
+    if (!correctedRows.length) return;
 
-  setUploading(true);
-  setDbError("");
-  setMessage("Uploading...");
+    setUploading(true);
+    setDbError("");
+    setMessage("Uploading...");
 
-  const cleanedData = correctedRows.map((row) => ({
-    ...row,
-    OBJECTID: row.OBJECTID ? Number(row.OBJECTID) : null,
-    id: row.id ? Number(row.id) : null,
-    onboarding_date: row.onboarding_date
-      ? new Date(row.onboarding_date)
-      : null,
-  }));
+    const cleanedData = correctedRows.map((row) => ({
+      ...row,
+      OBJECTID: row.OBJECTID ? Number(row.OBJECTID) : null,
+      id: row.id ? Number(row.id) : null,
+      onboarding_date: row.onboarding_date
+        ? new Date(row.onboarding_date)
+        : null,
+      farmer_name: row.farmer_name // comma-separated string
+    }));
 
-  try {
-    await uploadFarmerData(cleanedData);
-    setMessage("✅ Successfully uploaded!");
-  } catch (err) {
-    setDbError("❌ " + err.message);
-  } finally {
-    setUploading(false);
-  }
-};
+    try {
+      await uploadFarmerData(cleanedData);
+      setMessage("✅ Successfully uploaded!");
+    } catch (err) {
+      setDbError("❌ " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const columns = ALLOWED_FIELDS;
-
 
   return (
     <div className="kml-upload-container">
@@ -254,7 +277,7 @@ const handleSendToDB = async () => {
 
       <div className="stack-container">
 
-        {/* VALID DATA */}
+        {/* VALID */}
         <div className="box green">
           <h3>✅ Valid Data</h3>
 
@@ -284,9 +307,11 @@ const handleSendToDB = async () => {
           </button>
 
           <p>{message}</p>
+
+          {dbError && <p style={{ color: "red" }}>{dbError}</p>}
         </div>
 
-        {/* INVALID DATA */}
+        {/* INVALID */}
         <div className="box red">
           <h3>❌ Incorrect Data</h3>
 

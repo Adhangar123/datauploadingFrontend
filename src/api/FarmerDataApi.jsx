@@ -1,5 +1,4 @@
-
-const API_BASE_URL = "https://datauploadingbackend-13977221722.asia-south2.run.app/api";
+const API_BASE_URL = "https://datauploadingbackend-13977221722.asia-south2.run.app/api/v1";
 
 // 🌾 Upload Farmer Data (Bulk)
 export const uploadFarmerData = async (farmerRows) => {
@@ -20,6 +19,14 @@ export const uploadFarmerData = async (farmerRows) => {
     throw new Error(data.message || "Database error occurred");
   }
 
-  return data;
-};
+  // Backend returns: { message, processed, failed, errors, data }
+  // Throw if ALL rows failed
+  if (data.failed > 0 && data.processed === 0) {
+    const errorMessages = data.errors
+      .map((e) => `• ${e.item?.farmer_id || "unknown"}: ${e.message}`)
+      .join("\n");
+    throw new Error(`All rows failed:\n${errorMessages}`);
+  }
 
+  return data; // { message, processed, failed, errors, data }
+};

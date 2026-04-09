@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import "../style/Login.css";
 import { useAuth } from "../context/AuthContext";
@@ -30,15 +29,22 @@ export default function Login({ onClose, onLoginSuccess }) {
       // ✅ Save JWT Token
       localStorage.setItem("auth_token", data.token);
 
+      // ✅ Save user details (NEW - important)
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      // ✅ Optional: direct access values
+      localStorage.setItem("role", data.user.role);
+      localStorage.setItem("project_id", data.user.project_id);
+
       // ✅ Refresh Auth Context
       refreshAuth();
 
-      onLoginSuccess?.();
+      onLoginSuccess?.(data.user); // pass user data if needed
       onClose?.();
 
     } catch (err) {
       console.error("Login error:", err);
-      setError(err.message);
+      setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -99,4 +105,3 @@ export default function Login({ onClose, onLoginSuccess }) {
     </div>
   );
 }
-
