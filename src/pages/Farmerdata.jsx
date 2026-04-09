@@ -7,8 +7,6 @@ import "../style/KmlTodatabase.css";
 /* ---------------- ALLOWED DB FIELDS ---------------- */
 const ALLOWED_FIELDS = [
   "farmer_id",
-  "OBJECTID",
-  "id",
   "onboarding_date",
   "farmer_name",
   "state",
@@ -16,10 +14,11 @@ const ALLOWED_FIELDS = [
   "blocks",
   "grampanchayat",
   "village",
-  "land_owner",
-  "relationship_to_land_owner",
-  "plot_number",
-  "project_code"
+  "project_code",
+  "intervention_area_type",  // ✅ NEW
+  "survey_date",             // ✅ NEW
+  "interviewer_name",        // ✅ NEW
+  "gender"                   // ✅ NEW
 ];
 
 /* ---------------- REQUIRED HEADERS ---------------- */
@@ -54,7 +53,7 @@ const sanitizeRow = (row) => {
     // 🔥 farmer_name special handling
     if (key === "farmer_name") {
       const names = parseNames(rawValue);
-      const unique = [...new Set(names.map(n => n.toLowerCase()))];
+      const unique = [...new Set(names.map((n) => n.toLowerCase()))];
       cleaned[key] = unique.length ? names.join(", ") : null;
       return;
     }
@@ -73,7 +72,7 @@ const sanitizeRow = (row) => {
 /* ---------------- VALIDATION ---------------- */
 const validateRow = (row, existingRows = []) => {
   const errors = [];
-  const farmerIdPattern = /^[A-Za-z0-9-]+$/;
+const farmerIdPattern = /^[A-Za-z0-9-_]+$/;
 
   if (!row.farmer_id) errors.push("farmer_id is required");
   if (!row.project_code) errors.push("project_code is required");
@@ -85,28 +84,18 @@ const validateRow = (row, existingRows = []) => {
     errors.push("farmer_id must be alphanumeric (letters, numbers, dash only)");
   }
 
-  // 🔥 NEW LOGIC (allow same farmer_id, but prevent exact duplicate name)
+  // 🔥 Allow same farmer_id, but prevent exact duplicate name
   const duplicate = existingRows.find((r) => {
     if (r.farmer_id?.trim() !== row.farmer_id?.trim()) return false;
 
-    const existingNames = parseNames(r.farmer_name).map(n => n.toLowerCase());
-    return names.some(n => existingNames.includes(n.toLowerCase()));
+    const existingNames = parseNames(r.farmer_name).map((n) =>
+      n.toLowerCase()
+    );
+    return names.some((n) => existingNames.includes(n.toLowerCase()));
   });
 
   if (duplicate) {
     errors.push("Duplicate farmer_id + farmer_name already exists");
-  }
-
-  if (row.OBJECTID && isNaN(Number(row.OBJECTID))) {
-    errors.push("OBJECTID must be number");
-  }
-
-  if (row.id && isNaN(Number(row.id))) {
-    errors.push("id must be number");
-  }
-
-  if (row.plot_number && isNaN(Number(row.plot_number))) {
-    errors.push("plot_number must be number");
   }
 
   if (row.onboarding_date) {
@@ -114,6 +103,20 @@ const validateRow = (row, existingRows = []) => {
     if (isNaN(date.getTime())) {
       errors.push("onboarding_date must be valid date");
     }
+  }
+
+  // ✅ NEW: survey_date validation
+  if (row.survey_date) {
+    const date = new Date(row.survey_date);
+    if (isNaN(date.getTime())) {
+      errors.push("survey_date must be valid date");
+    }
+  }
+
+  // ✅ NEW: gender validation (optional but if provided must be valid)
+  const validGenders = ["male", "female", "other"];
+  if (row.gender && !validGenders.includes(row.gender.toString().trim().toLowerCase())) {
+    errors.push("gender must be male, female, or other");
   }
 
   return { isValid: errors.length === 0, errors };
@@ -127,26 +130,26 @@ const normalizeFieldName = (name) => {
   const mapping = {
     farmerid: "farmer_id",
     "farmer id": "farmer_id",
-    objectid: "OBJECTID",
     onboardingdate: "onboarding_date",
     "onboarding date": "onboarding_date",
     "farmer name": "farmer_name",
+    farmername: "farmer_name",
     "gram panchayat": "grampanchayat",
-    landowner: "land_owner",
-    "land owner": "land_owner",
-    relationshiptolandowner: "relationship_to_land_owner",
-    "relationship to land owner": "relationship_to_land_owner",
-    plotnumber: "plot_number",
-    "plot number": "plot_number",
     projectcode: "project_code",
     "project code": "project_code",
+    // ✅ NEW mappings
+    interventionareatype: "intervention_area_type",
+    "intervention area type": "intervention_area_type",
+    surveydate: "survey_date",
+    "survey date": "survey_date",
+    interviewername: "interviewer_name",
+    "interviewer name": "interviewer_name",
   };
 
   return mapping[lower] || lower;
 };
 
 const FarmerDataUpload = () => {
-
   const [file, setFile] = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
   const [incorrectRows, setIncorrectRows] = useState([]);
@@ -228,38 +231,54 @@ const FarmerDataUpload = () => {
       setCorrectedRows(valid);
       setIncorrectRows(invalid);
       setMessage(`Valid: ${valid.length} | Invalid: ${invalid.length}`);
-
     } catch (err) {
       setMessage(err.message);
     }
   };
 
-  const handleSendToDB = async () => {
-    if (!correctedRows.length) return;
+const handleSendToDB = async () => {
+  if (!correctedRows.length) return;
 
-    setUploading(true);
-    setDbError("");
-    setMessage("Uploading...");
+  setUploading(true);
+  setDbError("");
+  setMessage("Uploading...");
 
-    const cleanedData = correctedRows.map((row) => ({
-      ...row,
-      OBJECTID: row.OBJECTID ? Number(row.OBJECTID) : null,
-      id: row.id ? Number(row.id) : null,
-      onboarding_date: row.onboarding_date
-        ? new Date(row.onboarding_date)
-        : null,
-      farmer_name: row.farmer_name // comma-separated string
-    }));
+  const user = JSON.parse(localStorage.getItem("user"));
+  const userId = user?.user_id;
 
-    try {
-      await uploadFarmerData(cleanedData);
-      setMessage("✅ Successfully uploaded!");
-    } catch (err) {
-      setDbError("❌ " + err.message);
-    } finally {
-      setUploading(false);
-    }
-  };
+  if (!userId) {
+    setDbError("❌ User not logged in");
+    setUploading(false);
+    return;
+  }
+
+  const cleanedData = correctedRows.map((row) => ({
+    ...row,
+
+    // 🔥 FINAL FIX
+    created_by: userId,
+    updated_by: userId,
+
+    onboarding_date: row.onboarding_date
+      ? new Date(row.onboarding_date)
+      : null,
+
+    survey_date: row.survey_date
+      ? new Date(row.survey_date)
+      : null,
+
+    farmer_name: row.farmer_name,
+  }));
+
+  try {
+    await uploadFarmerData(cleanedData);
+    setMessage("✅ Successfully uploaded!");
+  } catch (err) {
+    setDbError("❌ " + err.message);
+  } finally {
+    setUploading(false);
+  }
+};
 
   const columns = ALLOWED_FIELDS;
 
@@ -267,7 +286,12 @@ const FarmerDataUpload = () => {
     <div className="kml-upload-container">
       <h2>Farmer Data Upload (.xlsx / .csv)</h2>
 
-      <input type="file" accept=".xlsx,.csv" onChange={handleFileChange} ref={fileInputRef} />
+      <input
+        type="file"
+        accept=".xlsx,.csv"
+        onChange={handleFileChange}
+        ref={fileInputRef}
+      />
 
       <button onClick={handleReadFile} disabled={!file}>
         1️⃣ Read & Validate
@@ -295,19 +319,24 @@ const FarmerDataUpload = () => {
               <tbody>
                 {correctedRows.map((row, i) => (
                   <tr key={i}>
-                    {columns.map((c) => <td key={c}>{row[c]}</td>)}
+                    {columns.map((c) => (
+                      <td key={c}>{row[c]}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <button className="send-db-btn" onClick={handleSendToDB} disabled={uploading}>
+          <button
+            className="send-db-btn"
+            onClick={handleSendToDB}
+            disabled={uploading}
+          >
             {uploading ? "Uploading..." : "2️⃣ Send to Database"}
           </button>
 
           <p>{message}</p>
-
           {dbError && <p style={{ color: "red" }}>{dbError}</p>}
         </div>
 
@@ -352,7 +381,7 @@ const FarmerDataUpload = () => {
                           const cleaned = sanitizeRow(row);
                           const check = validateRow(
                             cleaned,
-                            correctedRows.map(r => r.farmer_id)
+                            correctedRows.map((r) => r.farmer_id)
                           );
 
                           if (!check.isValid) {
@@ -374,7 +403,6 @@ const FarmerDataUpload = () => {
               </tbody>
             </table>
           </div>
-
         </div>
 
       </div>
