@@ -19,10 +19,10 @@ Legend
 import "../style/Visualization.css";
 
 const API_URL =
-"https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata?limit=5000";
+"https://datauploadingbackend-13977221722.asia-south2.run.app/api/v1/farmerdata?limit=5000";
 
 const UPDATE_API =
-"https://datauploadingbackend-13977221722.asia-south2.run.app/api/farmerdata/update/";
+"https://datauploadingbackend-13977221722.asia-south2.run.app/api/v1/farmerdata/update/";
 
 const COLORS = ["#4CAF50","#2196F3","#FF9800","#E91E63","#9C27B0","#00BCD4"];
 
