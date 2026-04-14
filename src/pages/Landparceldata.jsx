@@ -3,10 +3,9 @@ import { uploadLandParcelData } from "../api/LandparcelDataApi";
 import "../style/KmlTodatabase.css";
 import { kml } from "@tmcw/togeojson";
 
-/* =========================
-   FIELD TYPE VALIDATION
-========================= */
-
+/* ─────────────────────────────────────────────────────────────
+   FIELD TYPE MAPS
+───────────────────────────────────────────────────────────── */
 const NUMBER_FIELDS = ["area_ha"];
 
 const STRING_FIELDS = [
@@ -17,13 +16,23 @@ const STRING_FIELDS = [
   "khata_num",
 ];
 
-/* =========================
-   MULTIGEOMETRY → GEOMETRY NORMALIZER
-   Backend accepts: Polygon | MultiPolygon | GeometryCollection
-   @tmcw/togeojson converts KML <MultiGeometry> to GeometryCollection.
-   We keep GeometryCollection as-is — backend handles it via ST_CollectionExtract.
-========================= */
+/* ─────────────────────────────────────────────────────────────
+   BACKEND REQUIRED FIELDS
+───────────────────────────────────────────────────────────── */
+const BACKEND_REQUIRED = ["parcel_id", "geom", "project_id", "farmer_id"];
 
+/* ─────────────────────────────────────────────────────────────
+   VALID GEOMETRY TYPES
+───────────────────────────────────────────────────────────── */
+const VALID_GEOM_TYPES = new Set([
+  "Polygon",
+  "MultiPolygon",
+  "GeometryCollection",
+]);
+
+/* ─────────────────────────────────────────────────────────────
+   MULTIGEOMETRY NORMALIZER
+───────────────────────────────────────────────────────────── */
 const normalizeGeometry = (geometry) => {
   if (!geometry) return null;
 
@@ -37,70 +46,58 @@ const normalizeGeometry = (geometry) => {
     );
     if (polygons.length === 0) return null;
     if (polygons.length === 1) return polygons[0];
-    // Backend's ST_Multi + ST_CollectionExtract handles this correctly
-    return {
-      type: "GeometryCollection",
-      geometries: polygons,
-    };
+    return { type: "GeometryCollection", geometries: polygons };
   }
 
   return null;
 };
 
-/* =========================
+/* ─────────────────────────────────────────────────────────────
    PROPERTY RESOLVER
-   KML <SimpleData> fields sometimes export with a trailing underscore
-   e.g. "farmer_id_", "parcel_id_", "area_ha_".
-   Checks both variants so nothing is missed.
-========================= */
-
+   KML fields sometimes export with trailing underscore
+───────────────────────────────────────────────────────────── */
 const prop = (properties, key) =>
   properties?.[key] ?? properties?.[`${key}_`] ?? null;
 
-/* =========================
+/* ─────────────────────────────────────────────────────────────
    VALIDATE ROW
-   Backend accepts Polygon | MultiPolygon | GeometryCollection
-========================= */
-
-const VALID_GEOM_TYPES = new Set(["Polygon", "MultiPolygon", "GeometryCollection"]);
-
+───────────────────────────────────────────────────────────── */
 const validateRow = (row) => {
-  if (!row.parcel_id || typeof row.parcel_id !== "string") return false;
-  if (!row.geom || !VALID_GEOM_TYPES.has(row.geom?.type)) return false;
+  const errors = [];
 
-  for (let field of NUMBER_FIELDS) {
-    if (
-      row[field] !== null &&
-      row[field] !== undefined &&
-      row[field] !== "" &&
-      isNaN(Number(row[field]))
-    ) {
-      return false;
+  if (!row.parcel_id || typeof row.parcel_id !== "string" || row.parcel_id.trim() === "") {
+    errors.push("parcel_id is required");
+  }
+  if (!row.project_id || row.project_id.toString().trim() === "") {
+    errors.push("project_id is required");
+  }
+  if (!row.farmer_id || row.farmer_id.toString().trim() === "") {
+    errors.push("farmer_id is required");
+  }
+  if (!row.geom || !VALID_GEOM_TYPES.has(row.geom?.type)) {
+    errors.push("geom is required and must be Polygon, MultiPolygon, or GeometryCollection");
+  }
+
+  for (const field of NUMBER_FIELDS) {
+    const val = row[field];
+    if (val !== null && val !== undefined && val !== "" && isNaN(Number(val))) {
+      errors.push(`${field} must be a valid number`);
     }
   }
 
-  for (let field of STRING_FIELDS) {
-    if (
-      row[field] !== null &&
-      row[field] !== undefined &&
-      row[field] !== "" &&
-      typeof row[field] !== "string"
-    ) {
-      return false;
+  for (const field of STRING_FIELDS) {
+    const val = row[field];
+    if (val !== null && val !== undefined && val !== "" && typeof val !== "string") {
+      errors.push(`${field} must be a string`);
     }
   }
 
-  return true;
+  return { isValid: errors.length === 0, errors };
 };
 
-/* =========================
+/* ─────────────────────────────────────────────────────────────
    NORMALIZE ROW
-   Backend fields: parcel_id, project_id, farmer_id, geom,
-                   area_ha, plot_num, khata_num
-   is_active / created_at / updated_at → handled entirely by backend
-   source_file → NOT a backend column, excluded from payload
-========================= */
-
+───────────────────────────────────────────────────────────── */
 const normalizeRow = (f, i) => {
   const p = f.properties ?? {};
   return {
@@ -108,58 +105,54 @@ const normalizeRow = (f, i) => {
       ? String(prop(p, "parcel_id"))
       : `parcel_${i + 1}`,
 
-    project_id: prop(p, "project_id") != null
-      ? String(prop(p, "project_id"))
-      : null,
+    project_id:
+      prop(p, "project_id") != null ? String(prop(p, "project_id")) : null,
 
-    farmer_id: prop(p, "farmer_id") != null
-      ? String(prop(p, "farmer_id"))
-      : null,
+    farmer_id:
+      prop(p, "farmer_id") != null ? String(prop(p, "farmer_id")) : null,
 
     geom: normalizeGeometry(f.geometry ?? null),
 
-    area_ha: prop(p, "area_ha") != null && !isNaN(Number(prop(p, "area_ha")))
-      ? Number(prop(p, "area_ha"))
-      : null,
+    area_ha:
+      prop(p, "area_ha") != null && !isNaN(Number(prop(p, "area_ha")))
+        ? Number(prop(p, "area_ha"))
+        : null,
 
-    plot_num: prop(p, "plot_num") != null
-      ? String(prop(p, "plot_num"))
-      : null,
+    plot_num:
+      prop(p, "plot_num") != null ? String(prop(p, "plot_num")) : null,
 
-    khata_num: prop(p, "khata_num") != null
-      ? String(prop(p, "khata_num"))
-      : null,
+    khata_num:
+      prop(p, "khata_num") != null ? String(prop(p, "khata_num")) : null,
   };
 };
 
-/* =========================
-   PARSE
-========================= */
-
-const parseKML = (text, fileName) => {
+/* ─────────────────────────────────────────────────────────────
+   PARSERS
+───────────────────────────────────────────────────────────── */
+const parseKML = (text) => {
   const parser = new DOMParser();
   const xml = parser.parseFromString(text, "text/xml");
   const geojson = kml(xml);
   return geojson.features.map((f, i) => normalizeRow(f, i));
 };
 
-const parseGeoJSON = (text, fileName) => {
+const parseGeoJSON = (text) => {
   const geojson = JSON.parse(text);
   return geojson.features.map((f, i) => normalizeRow(f, i));
 };
 
-/* =========================
-   MAIN COMPONENT
-========================= */
-
+/* ─────────────────────────────────────────────────────────────
+   COMPONENT
+───────────────────────────────────────────────────────────── */
 const Landparceldata = () => {
-  const [file, setFile] = useState(null);
+  const [file, setFile]                   = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
   const [incorrectRows, setIncorrectRows] = useState([]);
-  const [message, setMessage] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [fileCount, setFileCount] = useState(0);
+  const [message, setMessage]             = useState("");
+  const [dbError, setDbError]             = useState("");
+  const [uploading, setUploading]         = useState(false);
+  const [progress, setProgress]           = useState(0);
+  const [fileCount, setFileCount]         = useState(0);
 
   const fileInputRef = useRef(null);
 
@@ -173,21 +166,23 @@ const Landparceldata = () => {
     "khata_num",
   ];
 
+  /* ── File select ── */
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
-    if (selected) {
-      setFile(selected);
-      setCorrectedRows([]);
-      setIncorrectRows([]);
-      setMessage("");
-      setFileCount(1);
-      setProgress(0);
-    }
+    if (!selected) return;
+    setFile(selected);
+    setCorrectedRows([]);
+    setIncorrectRows([]);
+    setMessage("");
+    setDbError("");
+    setFileCount(1);
+    setProgress(0);
   };
 
+  /* ── Read & Validate ── */
   const handleReadFile = async () => {
     if (!file) {
-      setMessage("❌ Select .kml or .geojson file");
+      setMessage("❌ Select a .kml or .geojson file");
       return;
     }
 
@@ -196,78 +191,123 @@ const Landparceldata = () => {
       const text = await file.text();
 
       if (file.name.endsWith(".kml")) {
-        rows = parseKML(text, file.name);
-      } else if (
-        file.name.endsWith(".geojson") ||
-        file.name.endsWith(".json")
-      ) {
-        rows = parseGeoJSON(text, file.name);
+        rows = parseKML(text);
+      } else if (file.name.endsWith(".geojson") || file.name.endsWith(".json")) {
+        rows = parseGeoJSON(text);
       } else {
-        throw new Error("Only .kml or .geojson supported");
+        throw new Error("Only .kml or .geojson files are supported");
       }
 
-      const validRows = rows.filter(validateRow);
-      const invalidRows = rows.filter((r) => !validateRow(r));
+      const valid   = [];
+      const invalid = [];
 
-      setCorrectedRows(validRows);
-      setIncorrectRows(invalidRows);
+      rows.forEach((row) => {
+        const { isValid, errors } = validateRow(row);
+        if (isValid) {
+          valid.push(row);
+        } else {
+          invalid.push({ ...row, __errors: errors });
+        }
+      });
+
+      setCorrectedRows(valid);
+      setIncorrectRows(invalid);
       setProgress(100);
-
       setMessage(
-        `✅ Parsed ${rows.length} parcels | Valid: ${validRows.length} | Invalid: ${invalidRows.length}`
+        `✅ Parsed ${rows.length} parcels | Valid: ${valid.length} | Invalid: ${invalid.length}`
       );
     } catch (err) {
       setMessage(`❌ ${err.message}`);
     }
   };
 
+  /* ── Reset ── */
   const handleReset = () => {
     setFile(null);
     setCorrectedRows([]);
     setIncorrectRows([]);
     setMessage("");
+    setDbError("");
     setProgress(0);
     setFileCount(0);
+    setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  /* ── Inline edit (immutable) ── */
   const handleEdit = (index, field, value) => {
-    const updated = [...incorrectRows];
-
-    if (NUMBER_FIELDS.includes(field)) {
-      updated[index][field] = value === "" ? null : Number(value);
-    } else {
-      updated[index][field] = value === "" ? null : value;
-    }
-
-    setIncorrectRows(updated);
+    setIncorrectRows((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        [field]: NUMBER_FIELDS.includes(field)
+          ? value === "" ? null : Number(value)
+          : value === "" ? null : value,
+      };
+      return updated;
+    });
   };
 
+  /* ── Approve single invalid row ── */
   const approveRow = (index) => {
     const row = incorrectRows[index];
-    if (validateRow(row)) {
-      setCorrectedRows([...correctedRows, row]);
-      setIncorrectRows(incorrectRows.filter((_, i) => i !== index));
-    } else {
-      alert(
-        "Row still invalid! Ensure parcel_id is filled and geometry is a valid Polygon / MultiPolygon / GeometryCollection."
-      );
+    const { __errors, ...cleanRow } = row;
+    const { isValid, errors } = validateRow(cleanRow);
+
+    if (!isValid) {
+      alert("Row is still invalid:\n" + errors.join("\n"));
+      return;
     }
+
+    setCorrectedRows((prev) => [...prev, cleanRow]);
+    setIncorrectRows((prev) => prev.filter((_, i) => i !== index));
   };
 
+  /* ── Send to DB ── */
   const handleSendToDB = async () => {
     if (!correctedRows.length) return;
 
     setUploading(true);
-    setMessage("🚀 Bulk Uploading...");
+    setDbError("");
+    setMessage("Uploading...");
+
+    // ── Exact same pattern as FarmerDataUpload ──
+    const user   = JSON.parse(localStorage.getItem("user"));
+    const userId = user?.user_id;
+
+    if (!userId) {
+      setDbError("❌ User not logged in");
+      setUploading(false);
+      return;
+    }
+
+    // Unix epoch timestamp — same as FarmerDataUpload (e.g. 1775732195)
+    const nowUnix = Math.floor(Date.now() / 1000);
+
+    const payload = correctedRows.map((row) => ({
+      parcel_id:  row.parcel_id,
+      project_id: row.project_id,
+      farmer_id:  row.farmer_id,
+      geom:       row.geom,
+      area_ha:    row.area_ha   ?? null,
+      plot_num:   row.plot_num  ?? null,
+      khata_num:  row.khata_num ?? null,
+
+      // ── audit fields — exact same as FarmerDataUpload ──
+      created_by: userId,
+      updated_by: userId,
+      created_at: nowUnix,
+      updated_at: nowUnix,
+    }));
 
     try {
-      const result = await uploadLandParcelData(correctedRows);
+      const result = await uploadLandParcelData(payload);
       setMessage(
-        `✅ Bulk UPSERT completed successfully | Processed: ${result.processed} | Skipped: ${result.skipped ?? 0}`
+        `✅ Successfully uploaded! | Processed: ${result.processed} | Skipped: ${result.skipped ?? 0}`
       );
+      setCorrectedRows([]);
     } catch (err) {
-      setMessage(`❌ ${err.message}`);
+      setDbError("❌ " + err.message);
     } finally {
       setUploading(false);
     }
@@ -289,7 +329,6 @@ const Landparceldata = () => {
           <button onClick={handleReadFile} disabled={!file}>
             1️⃣ Read & Validate File
           </button>
-
           <button onClick={handleReset}>🔄 Reset</button>
         </div>
       </div>
@@ -298,23 +337,28 @@ const Landparceldata = () => {
         <div className="progress-wrapper">
           <p>📂 Files: {fileCount}</p>
           <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
           <p>{progress}%</p>
         </div>
       )}
 
       <div className="stack-container">
+
+        {/* ── VALID TABLE ── */}
         <div className="box green">
-          <h3>✅ Valid Data</h3>
+          <h3>✅ Valid Data ({correctedRows.length})</h3>
 
           <div className="table-scroll">
             <table>
               <thead>
-                <tr>{columns.map((c) => <th key={c}>{c}</th>)}</tr>
+                <tr>
+                  {columns.map((c) => (
+                    <th key={c}>
+                      {BACKEND_REQUIRED.includes(c) ? `${c} *` : c}
+                    </th>
+                  ))}
+                </tr>
               </thead>
               <tbody>
                 {correctedRows.map((row, i) => (
@@ -323,9 +367,7 @@ const Landparceldata = () => {
                       <td key={c}>
                         {c === "geom"
                           ? row.geom?.type ?? "—"
-                          : row[c] != null
-                          ? String(row[c])
-                          : "—"}
+                          : row[c] != null ? String(row[c]) : "—"}
                       </td>
                     ))}
                   </tr>
@@ -337,29 +379,36 @@ const Landparceldata = () => {
           <button
             className="send-db-btn"
             onClick={handleSendToDB}
-            disabled={uploading || !correctedRows.length}
+            disabled={uploading || correctedRows.length === 0}
           >
             {uploading ? "Uploading..." : "2️⃣ Send to Database"}
           </button>
 
           {message && <p className="upload-message">{message}</p>}
+          {dbError && <p style={{ color: "red" }}>{dbError}</p>}
         </div>
 
+        {/* ── INVALID TABLE ── */}
         <div className="box red">
-          <h3>❌ Incorrect Data (Edit & Approve)</h3>
+          <h3>❌ Incorrect Data ({incorrectRows.length}) — Edit & Approve</h3>
 
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  {columns.map((c) => <th key={c}>{c}</th>)}
+                  {columns.map((c) => (
+                    <th key={c}>
+                      {BACKEND_REQUIRED.includes(c) ? `${c} *` : c}
+                    </th>
+                  ))}
+                  <th>Reason</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {incorrectRows.length === 0 ? (
                   <tr>
-                    <td colSpan={columns.length + 1}>No Incorrect Data</td>
+                    <td colSpan={columns.length + 2}>No Incorrect Data</td>
                   </tr>
                 ) : (
                   incorrectRows.map((row, i) => (
@@ -367,21 +416,22 @@ const Landparceldata = () => {
                       {columns.map((c) => (
                         <td key={c}>
                           {c === "geom" ? (
-                            "Invalid Geometry"
+                            <span style={{ color: "red", fontSize: "12px" }}>
+                              Invalid Geometry
+                            </span>
                           ) : (
                             <input
                               value={row[c] ?? ""}
-                              onChange={(e) =>
-                                handleEdit(i, c, e.target.value)
-                              }
+                              onChange={(e) => handleEdit(i, c, e.target.value)}
                             />
                           )}
                         </td>
                       ))}
+                      <td style={{ color: "red", fontSize: "12px" }}>
+                        {row.__errors?.join(", ")}
+                      </td>
                       <td>
-                        <button onClick={() => approveRow(i)}>
-                          Approve
-                        </button>
+                        <button onClick={() => approveRow(i)}>Approve</button>
                       </td>
                     </tr>
                   ))
@@ -390,6 +440,7 @@ const Landparceldata = () => {
             </table>
           </div>
         </div>
+
       </div>
     </div>
   );
