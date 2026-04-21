@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import "../style/WeeklyUpdate.css";
-import { fetchProjects, createProject, updateProject } from "../api/projectUpdateAPI";
+import { fetchProjects, createProject, updateProject, fetchProjectHistory } from "../api/projectUpdateAPI";
 
 const getLoggedInUserId = () => {
   try {
@@ -67,6 +67,20 @@ const FIELD_PLACEHOLDERS = {
   farmer_no_existing:    "e.g. 120",
   tree_no_new:           "e.g. 500",
   tree_no_existing:      "e.g. 3000",
+};
+
+// Field display names for better readability
+const FIELD_DISPLAY_NAMES = {
+  area_mapped_new: "Area Mapped (New)",
+  area_mapped_existing: "Area Mapped (Existing)",
+  kml_verified_new: "KML Verified (New)",
+  kml_verified_existing: "KML Verified (Existing)",
+  cra_data_new: "CRA Data (New)",
+  cra_data_existing: "CRA Data (Existing)",
+  farmer_no_new: "Farmer Count (New)",
+  farmer_no_existing: "Farmer Count (Existing)",
+  tree_no_new: "Tree Count (New)",
+  tree_no_existing: "Tree Count (Existing)",
 };
 
 // ─── Validation helpers ──────────────────────────────────────────────────────
@@ -136,6 +150,65 @@ const hasChanges = (original, current) => {
   });
 };
 
+
+// ─── Format epoch time to readable date time ───────────────────────────────
+const formatEpochToDateTime = (epochTime) => {
+  if (!epochTime) return "—";
+  
+  // Convert to number if it's string
+  let timestamp = typeof epochTime === 'string' ? parseInt(epochTime) : epochTime;
+  
+  // Check if timestamp is in seconds (10 digits) or milliseconds (13 digits)
+  const date = new Date(timestamp < 10000000000 ? timestamp * 1000 : timestamp);
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) return "Invalid Date";
+  
+  // Format as: 21/04/2026, 02:43:51 pm
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }).replace(/\//g, '/');
+};
+
+// ─── Process history data to show row-wise field changes ───────────────────
+const processHistoryData = (historyRecords) => {
+  const rowWiseData = [];
+  
+  historyRecords.forEach((record) => {
+    // Define all fields that we want to track
+    const fieldsToTrack = [
+      'project_name',
+      'area_mapped_new', 'area_mapped_existing',
+      'kml_verified_new', 'kml_verified_existing',
+      'cra_data_new', 'cra_data_existing',
+      'farmer_no_new', 'farmer_no_existing',
+      'tree_no_new', 'tree_no_existing'
+    ];
+    
+    // For each field, create a row if it exists in the record
+    fieldsToTrack.forEach(field => {
+      if (record.hasOwnProperty(field)) {
+        rowWiseData.push({
+          field_name: FIELD_DISPLAY_NAMES[field] || field,
+          old_value: record[field], // Since this is a history record, this is the value at that time
+          new_value: record[field],
+          updated_by: record.updated_by || record.created_by,
+          updated_at: record.updated_at || record.created_at,
+          action: record.action || "UPDATE"
+        });
+      }
+    });
+  });
+  
+  return rowWiseData;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WeeklyUpdate = () => {
@@ -150,6 +223,14 @@ const WeeklyUpdate = () => {
   const [filterType, setFilterType]     = useState("project_name");
   const [loading, setLoading]           = useState(false);
   const [dialog, setDialog]             = useState({ show: false, message: "", type: "" });
+  
+  // History modal states
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projectHistory, setProjectHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
 
   const userId = getLoggedInUserId();
 
@@ -299,6 +380,62 @@ const WeeklyUpdate = () => {
     setLoading(false);
   };
 
+  // ── History handlers ─────────────────────────────────────────────────────
+  const handleViewHistory = async (project) => {
+    setSelectedProject(project);
+    setShowHistoryModal(true);
+    setHistoryPage(1);
+    await fetchHistoryData(project.project_id, 1);
+  };
+
+const fetchHistoryData = async (projectId, page = 1) => {
+  setHistoryLoading(true);
+  try {
+    const result = await fetchProjectHistory(projectId, page, 200);
+
+    if (result.ok && result.data.success) {
+      const historyData = result.data.data || [];
+
+      // ✅ Direct DB rows show karenge (no transformation)
+      const formattedHistory = historyData.map((record) => ({
+        project_name: record.project_name,
+        area_mapped_new: record.area_mapped_new,
+        area_mapped_existing: record.area_mapped_existing,
+        kml_verified_new: record.kml_verified_new,
+        kml_verified_existing: record.kml_verified_existing,
+        cra_data_new: record.cra_data_new,
+        cra_data_existing: record.cra_data_existing,
+        farmer_no_new: record.farmer_no_new,
+        farmer_no_existing: record.farmer_no_existing,
+        tree_no_new: record.tree_no_new,
+        tree_no_existing: record.tree_no_existing,
+        username: record.username, 
+        updated_by: record.updated_by || record.created_by,
+        updated_at: record.updated_at || record.created_at,
+      }));
+
+      setProjectHistory(formattedHistory);
+      setHistoryTotal(result.data.total || 0);
+    } else {
+      setProjectHistory([]);
+      setHistoryTotal(0);
+    }
+  } catch (error) {
+    console.error("Error fetching history:", error);
+    setProjectHistory([]);
+    setHistoryTotal(0);
+  } finally {
+    setHistoryLoading(false);
+  }
+};
+
+  const handleHistoryPageChange = (newPage) => {
+    if (newPage >= 1 && selectedProject) {
+      setHistoryPage(newPage);
+      fetchHistoryData(selectedProject.project_id, newPage);
+    }
+  };
+
   // ── Input helpers ─────────────────────────────────────────────────────────
   const getInputType = (field) => {
     if (FLOAT_FIELDS.includes(field) || INT_FIELDS.includes(field)) return "number";
@@ -336,6 +473,92 @@ const WeeklyUpdate = () => {
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── History Modal ───────────────────────────────────────────────── */}
+      {showHistoryModal && selectedProject && (
+        <div className="modal-overlay" onClick={() => setShowHistoryModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📜 Project History: {selectedProject.project_id} - {selectedProject.project_name}</h3>
+              <button className="modal-close" onClick={() => setShowHistoryModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {historyLoading ? (
+                <div className="history-loading">Loading history...</div>
+              ) : projectHistory.length === 0 ? (
+                <div className="history-empty">No history records found for this project.</div>
+              ) : (
+                <>
+                  <div className="history-table-wrapper">
+                    <table className="history-table">
+                      <thead>
+                        <tr>
+                            <th>Project Name</th>
+                            <th>Area New</th>
+                            <th>Area Existing</th>
+                            <th>KML New</th>
+                            <th>KML Existing</th>
+                            <th>CRA New</th>
+                            <th>CRA Existing</th>
+                            <th>Farmer New</th>
+                            <th>Farmer Existing</th>
+                            <th>Tree New</th>
+                            <th>Tree Existing</th>
+                            <th>Updated By</th>
+                            <th>Updated At</th>
+                        </tr>
+                        </thead>
+
+                        <tbody>
+                        {projectHistory.map((row, idx) => (
+                            <tr key={idx}>
+                            <td>{row.project_name}</td>
+                            <td>{row.area_mapped_new ?? "—"}</td>
+                            <td>{row.area_mapped_existing ?? "—"}</td>
+                            <td>{row.kml_verified_new ?? "—"}</td>
+                            <td>{row.kml_verified_existing ?? "—"}</td>
+                            <td>{row.cra_data_new ?? "—"}</td>
+                            <td>{row.cra_data_existing ?? "—"}</td>
+                            <td>{row.farmer_no_new ?? "—"}</td>
+                            <td>{row.farmer_no_existing ?? "—"}</td>
+                            <td>{row.tree_no_new ?? "—"}</td>
+                            <td>{row.tree_no_existing ?? "—"}</td>
+                            <td>{row.username || `User ${row.updated_by}`}</td>    
+                        <td>{formatEpochToDateTime(row.updated_at)}</td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Pagination */}
+                  {historyTotal > 200 && (
+                    <div className="history-pagination">
+                      <button
+                        onClick={() => handleHistoryPageChange(historyPage - 1)}
+                        disabled={historyPage === 1}
+                        className="pagination-btn"
+                      >
+                        ← Previous
+                      </button>
+                      <span className="pagination-info">
+                        Page {historyPage} of {Math.ceil(historyTotal / 200)}
+                      </span>
+                      <button
+                        onClick={() => handleHistoryPageChange(historyPage + 1)}
+                        disabled={historyPage >= Math.ceil(historyTotal / 200)}
+                        className="pagination-btn"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -432,7 +655,7 @@ const WeeklyUpdate = () => {
         </div>
 
         <div className="table-wrapper">
-          <table>
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Project ID</th>
@@ -440,7 +663,7 @@ const WeeklyUpdate = () => {
                 <th>Area Mapped (New)</th>
                 <th>Farmer Count (New)</th>
                 <th>Tree Count (New)</th>
-                <th>Action</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -459,16 +682,24 @@ const WeeklyUpdate = () => {
                     <td>{item.farmer_no_new ?? "—"}</td>
                     <td>{item.tree_no_new ?? "—"}</td>
                     <td>
-                      <button
-                        className="edit-btn"
-                        onClick={() => {
-                          setEditData({ ...item });
-                          setEditOriginal({ ...item });
-                          setEditErrors({});
-                        }}
-                      >
-                        Edit
-                      </button>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          className="edit-btn"
+                          onClick={() => {
+                            setEditData({ ...item });
+                            setEditOriginal({ ...item });
+                            setEditErrors({});
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="history-btn"
+                          onClick={() => handleViewHistory(item)}
+                        >
+                          📜 History
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

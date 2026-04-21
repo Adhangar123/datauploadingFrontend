@@ -67,3 +67,60 @@ export const updateProject = async (projectId, projectData, userId) => {
     throw error;
   }
 };
+
+// Fetch project history
+export const fetchProjectHistory = async (projectId, page = 1, limit = 200) => {
+  try {
+    const response = await fetch(
+      `${API_BASE}/${projectId}/history?page=${page}&limit=${limit}`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return { ok: true, data };
+  } catch (error) {
+    console.error("Fetch history error:", error);
+    throw error;
+  }
+};
+
+// Fetch project history with pagination and filtering options
+export const fetchProjectHistoryAdvanced = async (projectId, options = {}) => {
+  const {
+    page = 1,
+    limit = 200,
+    startDate = null,
+    endDate = null,
+    userId = null
+  } = options;
+
+  try {
+    let url = `${API_BASE}/${projectId}/history?page=${page}&limit=${limit}`;
+    
+    if (startDate) url += `&startDate=${startDate}`;
+    if (endDate) url += `&endDate=${endDate}`;
+    if (userId) url += `&userId=${userId}`;
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return { ok: true, data };
+  } catch (error) {
+    console.error("Fetch history error:", error);
+    throw error;
+  }
+};

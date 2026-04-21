@@ -287,3 +287,177 @@ table td {
   margin-top: 8px;
   text-align: right;
 }
+/* ───────────────── MODAL OVERLAY ───────────────── */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+/* ───────────────── MODAL BOX ───────────────── */
+.modal-content {
+  background: #fff;
+  width: 95%;
+  max-width: 1300px;
+  max-height: 90vh;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fadeInScale 0.25s ease;
+}
+
+@keyframes fadeInScale {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ───────────────── HEADER ───────────────── */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1e293b;
+  color: #fff;
+  padding: 14px 20px;
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* ───────────────── BODY ───────────────── */
+.modal-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* ───────────────── TABLE WRAPPER ───────────────── */
+.history-table-wrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+}
+
+/* ───────────────── TABLE ───────────────── */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1100px;
+}
+
+/* HEADER */
+.history-table thead {
+  background: #f1f5f9;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.history-table th {
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* ROWS */
+.history-table td {
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* ZEBRA STRIPES */
+.history-table tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+/* HOVER EFFECT */
+.history-table tbody tr:hover {
+  background: #e0f2fe;
+  transition: 0.2s;
+}
+
+/* ───────────────── EMPTY / LOADING ───────────────── */
+.history-loading,
+.history-empty {
+  text-align: center;
+  padding: 30px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* ───────────────── PAGINATION ───────────────── */
+.history-pagination {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+}
+
+.pagination-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pagination-btn:hover {
+  background: #1d4ed8;
+}
+
+.pagination-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #475569;
+}
+
+/* ───────────────── BUTTON (History Button) ───────────────── */
+.history-btn {
+  background: #0ea5e9;
+  border: none;
+  padding: 6px 10px;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.history-btn:hover {
+  background: #0284c7;
+}
