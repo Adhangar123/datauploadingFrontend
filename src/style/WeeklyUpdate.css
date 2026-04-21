@@ -1,0 +1,184 @@
+.page {
+  background: #f4f6f9;
+  min-height: 100vh;
+  padding: 30px;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.title {
+  text-align: center;
+  margin-bottom: 25px;
+  color: #222;
+}
+
+.card {
+  background: #fff;
+  padding: 20px;
+  margin-bottom: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.card-header {
+  border-bottom: 1px solid #eee;
+  margin-bottom: 15px;
+  padding-bottom: 8px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.form-grid input {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  transition: 0.2s;
+}
+
+.form-grid input:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.action-row {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+}
+
+.primary-btn {
+  background: #007bff;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.primary-btn:hover {
+  background: #0056b3;
+}
+
+.add-btn {
+  background: #28a745;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+}
+
+.delete-btn {
+  background: #ff4d4f;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table th {
+  background: #f1f3f5;
+  padding: 10px;
+  text-align: left;
+}
+
+table td {
+  padding: 10px;
+  border-top: 1px solid #eee;
+}
+
+.edit-btn {
+  background: #ffc107;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.edit-card {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f9fafc;
+  border-radius: 10px;
+}
+
+.toast {
+  text-align: center;
+  margin-bottom: 15px;
+  color: green;
+  font-weight: bold;
+}
+/* Error state input */
+.input-error {
+  border-color: #e53e3e !important;
+  background: #fff5f5;
+}
+
+/* Error message text */
+.error-msg {
+  display: block;
+  font-size: 11px;
+  color: #e53e3e;
+  margin-top: 3px;
+}
+
+/* Error toast */
+.toast-error {
+  background: #e53e3e;
+}
+
+/* field-wrap: input + error message ek saath */
+.field-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Row separator in add form */
+.form-section {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.row-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  margin-bottom: 6px;
+}
+/* Row header: label left, remove button right */
+.form-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+/* Remove entry button — top right of each row */
+.remove-entry-btn {
+  background: transparent;
+  border: 1px solid #e53e3e;
+  color: #e53e3e;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.remove-entry-btn:hover {
+  background: #e53e3e;
+  color: #fff;
+}

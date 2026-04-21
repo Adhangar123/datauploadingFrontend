@@ -8,6 +8,8 @@ import ProtectedRoute from "../Auth/ProtectedRoute";
 import Help from "../pages/Help";
 import Fileconverter from "../pages/Fileconverter";
 import Visualization from "../pages/Visualization";
+import DocumentUploading from "../pages/DocumentUploading";
+import WeeklyUpdate from "../pages/WeeklyUpdate";
 
 const AppRoutes = () => (
   <Routes>
@@ -23,6 +25,10 @@ const AppRoutes = () => (
       <Route path="/farmer-data" element={<Farmerdata />} />
       <Route path="/land-parcel-data" element={<Landparceldata />} />
       <Route path="/Visualization" element={<Visualization />} />
+      <Route path="/DocumentUploading" element={<DocumentUploading />} />
+      <Route path="/WeeklyUpdate" element={<WeeklyUpdate />} />
+
+
 
     </Route>
   </Routes>

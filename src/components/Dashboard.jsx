@@ -54,7 +54,8 @@ const Dashboard = () => {
             <p>Upload land parcel boundaries, KML/GeoJSON files, and metadata.</p>
           </div>
           <div
-            className="dashboard-card cra"
+            className="dashboard-card cra" 
+            onClick={() => handleCardClick("/DocumentUploading")}
           >
             <div className="card-icon">📊</div>
             <h2>CRA Data</h2>
@@ -68,6 +69,15 @@ const Dashboard = () => {
             <h2>Data Visualization</h2>
             <p>View farmer data insights, charts, and analytics dashboards.</p>
           </div>
+
+            <div
+              className="dashboard-card cra"
+              onClick={() => handleCardClick("/WeeklyUpdate")}
+            >
+              <div className="card-icon">📊</div>
+              <h2>Weekly data updating</h2>
+              <p>Track and monitor weekly updates of farmer data, including recent changes, additions, and progress insights.</p>
+            </div>
         </div>
       </div>
 
