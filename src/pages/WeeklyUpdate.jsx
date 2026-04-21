@@ -1,17 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import "../style/WeeklyUpdate.css";
-
-const API_BASE =
-  "https://datauploadingbackend-13977221722.asia-south2.run.app/api/v1/project-update";
-
-// ─── Auth headers with user_id ───────────────────────────────────────────────
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
+import { fetchProjects, createProject, updateProject } from "../api/projectUpdateAPI";
 
 const getLoggedInUserId = () => {
   try {
@@ -38,19 +27,14 @@ const emptyProject = {
 };
 
 const FLOAT_FIELDS = [
-  "area_mapped_new",
-  "area_mapped_existing",
-  "kml_verified_new",
-  "kml_verified_existing",
-  "cra_data_new",
-  "cra_data_existing",
+  "area_mapped_new", "area_mapped_existing",
+  "kml_verified_new", "kml_verified_existing",
+  "cra_data_new", "cra_data_existing",
 ];
 
 const INT_FIELDS = [
-  "farmer_no_new",
-  "farmer_no_existing",
-  "tree_no_new",
-  "tree_no_existing",
+  "farmer_no_new", "farmer_no_existing",
+  "tree_no_new", "tree_no_existing",
 ];
 
 const REQUIRED_FIELDS = ["project_id", "project_name"];
@@ -106,80 +90,92 @@ const isValidNonNegativeInt = (val) => {
 
 const validateProject = (proj, isEdit = false) => {
   const errors = {};
-
   if (!isEdit) {
     if (!proj.project_id || proj.project_id.trim() === "") {
       errors.project_id = "Project ID is required.";
     } else if (!isValidProjectId(proj.project_id)) {
-      errors.project_id =
-        "Only letters, numbers, hyphens (-) and underscores (_) are allowed (max 100 chars).";
+      errors.project_id = "Only letters, numbers, hyphens (-) and underscores (_) are allowed (max 100 chars).";
     }
   }
-
   if (!proj.project_name || proj.project_name.trim() === "") {
     errors.project_name = "Project Name is required.";
   } else if (proj.project_name.trim().length > 255) {
     errors.project_name = "Project Name must not exceed 255 characters.";
   }
-
   FLOAT_FIELDS.forEach((field) => {
-    if (proj[field] !== "" && !isValidPositiveFloat(proj[field])) {
+    if (proj[field] !== "" && !isValidPositiveFloat(proj[field]))
       errors[field] = "Must be a positive number (e.g. 12.50).";
-    }
   });
-
   INT_FIELDS.forEach((field) => {
-    if (proj[field] !== "" && !isValidNonNegativeInt(proj[field])) {
+    if (proj[field] !== "" && !isValidNonNegativeInt(proj[field]))
       errors[field] = "Must be a whole non-negative number (e.g. 25).";
-    }
   });
-
   return errors;
 };
 
 const preparePayload = (proj, userId, isEdit = false) => {
   const payload = { ...proj };
-
-  FLOAT_FIELDS.forEach((f) => {
-    payload[f] = proj[f] !== "" ? parseFloat(proj[f]) : null;
-  });
-  INT_FIELDS.forEach((f) => {
-    payload[f] = proj[f] !== "" ? parseInt(proj[f], 10) : 0;
-  });
-
-  // ── User tracking ──────────────────────────────────────────────────────────
+  FLOAT_FIELDS.forEach((f) => { payload[f] = proj[f] !== "" ? parseFloat(proj[f]) : null; });
+  INT_FIELDS.forEach((f) => { payload[f] = proj[f] !== "" ? parseInt(proj[f], 10) : 0; });
   if (!isEdit) {
     payload.created_by = userId;
     payload.updated_by = userId;
   } else {
     payload.updated_by = userId;
   }
-
   return payload;
+};
+
+// ─── Check if edit form has any changes ──────────────────────────────────────
+const hasChanges = (original, current) => {
+  if (!original || !current) return false;
+  return Object.keys(emptyProject).some((key) => {
+    const orig = original[key] ?? "";
+    const curr = current[key] ?? "";
+    return String(orig) !== String(curr);
+  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WeeklyUpdate = () => {
-  const [projects, setProjects]     = useState([{ ...emptyProject }]);
-  const [addErrors, setAddErrors]   = useState([{}]);
-  const [editData, setEditData]     = useState(null);
-  const [editErrors, setEditErrors] = useState({});
-  const [dataList, setDataList]     = useState([]);
-  const [message, setMessage]       = useState({ text: "", type: "" });
-  const [loading, setLoading]       = useState(false);
+  const [projects, setProjects]         = useState([{ ...emptyProject }]);
+  const [addErrors, setAddErrors]       = useState([{}]);
+  const [editData, setEditData]         = useState(null);
+  const [editOriginal, setEditOriginal] = useState(null);
+  const [editErrors, setEditErrors]     = useState({});
+  const [dataList, setDataList]         = useState([]);
+  const [filteredList, setFilteredList] = useState([]);
+  const [filterText, setFilterText]     = useState("");
+  const [filterType, setFilterType]     = useState("project_name");
+  const [loading, setLoading]           = useState(false);
+  const [dialog, setDialog]             = useState({ show: false, message: "", type: "" });
 
   const userId = getLoggedInUserId();
 
-  // ── Toast auto-hide ────────────────────────────────────────────────────────
+  // ── Dialog auto-close after 3s ────────────────────────────────────────────
   useEffect(() => {
-    if (message.text) {
-      const t = setTimeout(() => setMessage({ text: "", type: "" }), 3500);
+    if (dialog.show) {
+      const t = setTimeout(() => setDialog({ show: false, message: "", type: "" }), 3000);
       return () => clearTimeout(t);
     }
-  }, [message]);
+  }, [dialog]);
 
-  // ── Add form handlers ──────────────────────────────────────────────────────
+  // ── Filter logic ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!filterText.trim()) {
+      setFilteredList(dataList);
+    } else {
+      const lower = filterText.trim().toLowerCase();
+      setFilteredList(
+        dataList.filter((item) =>
+          String(item[filterType] ?? "").toLowerCase().includes(lower)
+        )
+      );
+    }
+  }, [filterText, filterType, dataList]);
+
+  // ── Add form handlers ─────────────────────────────────────────────────────
   const handleAddChange = (index, e) => {
     const updated = [...projects];
     updated[index][e.target.name] = e.target.value;
@@ -200,13 +196,17 @@ const WeeklyUpdate = () => {
     setAddErrors(addErrors.filter((_, i) => i !== index));
   };
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleAddSubmit = async () => {
+    if (!userId) {
+      setDialog({ show: true, message: "User not logged in. Please login again.", type: "error" });
+      return;
+    }
     const allErrors = projects.map((p) => validateProject(p, false));
     const hasErrors = allErrors.some((e) => Object.keys(e).length > 0);
     if (hasErrors) {
       setAddErrors(allErrors);
-      setMessage({ text: "Please fix the errors before submitting.", type: "error" });
+      setDialog({ show: true, message: "Please fix the errors before submitting.", type: "error" });
       return;
     }
 
@@ -215,13 +215,9 @@ const WeeklyUpdate = () => {
 
     for (let project of projects) {
       try {
-        const res = await fetch(API_BASE, {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify(preparePayload(project, userId, false)),
-        });
-        const data = await res.json();
-        if (!res.ok) {
+        const payload = preparePayload(project, userId, false);
+        const { ok, data } = await createProject(payload, userId);
+        if (!ok) {
           failedCount++;
           console.error(`Project ${project.project_id} failed:`, data.message);
         }
@@ -234,27 +230,31 @@ const WeeklyUpdate = () => {
     setLoading(false);
 
     if (failedCount === 0) {
-      setMessage({
-        text: `${projects.length} project(s) added successfully. ✅`,
-        type: "success",
-      });
       setProjects([{ ...emptyProject }]);
       setAddErrors([{}]);
+      setDialog({
+        show: true,
+        message: `${projects.length} project(s) submitted successfully!`,
+        type: "success",
+      });
     } else {
-      setMessage({
-        text: `${failedCount} project(s) failed to submit. Check console for details.`,
+      setDialog({
+        show: true,
+        message: `${failedCount} project(s) failed to submit. Check console for details.`,
         type: "error",
       });
     }
     fetchData();
   };
 
-  // ── Fetch list ─────────────────────────────────────────────────────────────
+  // ── Fetch list ────────────────────────────────────────────────────────────
   const fetchData = async () => {
     try {
-      const res = await fetch(`${API_BASE}?limit=20`, { headers: getAuthHeaders() });
-      const data = await res.json();
-      if (data.success) setDataList(data.data);
+      const data = await fetchProjects(100);
+      if (data.success) {
+        setDataList(data.data);
+        setFilteredList(data.data);
+      }
     } catch (err) {
       console.error("Fetch error:", err);
     }
@@ -262,7 +262,7 @@ const WeeklyUpdate = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  // ── Edit handlers ──────────────────────────────────────────────────────────
+  // ── Edit handlers ─────────────────────────────────────────────────────────
   const handleEditChange = (e) => {
     setEditData({ ...editData, [e.target.name]: e.target.value });
     if (editErrors[e.target.name]) {
@@ -271,6 +271,10 @@ const WeeklyUpdate = () => {
   };
 
   const handleUpdate = async () => {
+    if (!userId) {
+      setDialog({ show: true, message: "User not logged in. Please login again.", type: "error" });
+      return;
+    }
     const errors = validateProject(editData, true);
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
@@ -278,30 +282,24 @@ const WeeklyUpdate = () => {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/${editData.project_id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(preparePayload(editData, userId, true)),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage({ text: "Project updated successfully. ✅", type: "success" });
+      const payload = preparePayload(editData, userId, true);
+      const { ok, data } = await updateProject(editData.project_id, payload, userId);
+      if (ok) {
+        setDialog({ show: true, message: "Project updated successfully!", type: "success" });
         setEditData(null);
+        setEditOriginal(null);
         setEditErrors({});
         fetchData();
       } else {
-        setMessage({
-          text: data.message || "Update failed. Please try again.",
-          type: "error",
-        });
+        setDialog({ show: true, message: data.message || "Update failed. Please try again.", type: "error" });
       }
     } catch (err) {
-      setMessage({ text: "A network error occurred. Please try again.", type: "error" });
+      setDialog({ show: true, message: "A network error occurred. Please try again.", type: "error" });
     }
     setLoading(false);
   };
 
-  // ── Input helpers ──────────────────────────────────────────────────────────
+  // ── Input helpers ─────────────────────────────────────────────────────────
   const getInputType = (field) => {
     if (FLOAT_FIELDS.includes(field) || INT_FIELDS.includes(field)) return "number";
     return "text";
@@ -314,15 +312,31 @@ const WeeklyUpdate = () => {
     return {};
   };
 
+  const isDirty = hasChanges(editOriginal, editData);
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="page">
       <h1 className="title">📊 Weekly Project Update</h1>
 
-      {/* Toast */}
-      {message.text && (
-        <div className={`toast ${message.type === "error" ? "toast-error" : ""}`}>
-          {message.text}
+      {/* ── Success/Error Dialog ────────────────────────────────────────── */}
+      {dialog.show && (
+        <div className="dialog-overlay" onClick={() => setDialog({ show: false, message: "", type: "" })}>
+          <div
+            className={`dialog-box ${dialog.type === "error" ? "dialog-error" : "dialog-success"}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="dialog-icon">
+              {dialog.type === "success" ? "✅" : "❌"}
+            </div>
+            <p className="dialog-message">{dialog.message}</p>
+            <button
+              className="dialog-close-btn"
+              onClick={() => setDialog({ show: false, message: "", type: "" })}
+            >
+              OK
+            </button>
+          </div>
         </div>
       )}
 
@@ -334,8 +348,6 @@ const WeeklyUpdate = () => {
 
         {projects.map((proj, index) => (
           <div key={index} className="form-section">
-
-            {/* Row header: label left, remove button right */}
             <div className="form-section-header">
               <span className="row-label">Entry {index + 1}</span>
               {projects.length > 1 && (
@@ -379,11 +391,7 @@ const WeeklyUpdate = () => {
 
         <div className="action-row">
           <button className="add-btn" onClick={addRow}>+ Add Another Entry</button>
-          <button
-            className="primary-btn"
-            onClick={handleAddSubmit}
-            disabled={loading}
-          >
+          <button className="primary-btn" onClick={handleAddSubmit} disabled={loading}>
             {loading ? "Submitting..." : "Submit All"}
           </button>
         </div>
@@ -392,7 +400,35 @@ const WeeklyUpdate = () => {
       {/* ── UPDATE SECTION ──────────────────────────────────────────────── */}
       <div className="card">
         <div className="card-header">
-          <h3> Update Projects Data</h3>
+          <h3>Update Projects Data</h3>
+        </div>
+
+        {/* ── Filter Bar ──────────────────────────────────────────────── */}
+        <div className="filter-bar">
+          <select
+            className="filter-select"
+            value={filterType}
+            onChange={(e) => { setFilterType(e.target.value); setFilterText(""); }}
+          >
+            <option value="project_name">Filter by Name</option>
+            <option value="project_id">Filter by Project ID</option>
+          </select>
+          <input
+            className="filter-input"
+            type="text"
+            placeholder={
+              filterType === "project_name"
+                ? "Search by project name..."
+                : "Search by project ID..."
+            }
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+          />
+          {filterText && (
+            <button className="filter-clear-btn" onClick={() => setFilterText("")}>
+              ✕ Clear
+            </button>
+          )}
         </div>
 
         <div className="table-wrapper">
@@ -408,14 +444,14 @@ const WeeklyUpdate = () => {
               </tr>
             </thead>
             <tbody>
-              {dataList.length === 0 ? (
+              {filteredList.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: "center", padding: "16px" }}>
-                    No records found.
+                    {filterText ? "No matching records found." : "No records found."}
                   </td>
                 </tr>
               ) : (
-                dataList.map((item) => (
+                filteredList.map((item) => (
                   <tr key={item.project_id}>
                     <td>{item.project_id}</td>
                     <td>{item.project_name}</td>
@@ -425,7 +461,11 @@ const WeeklyUpdate = () => {
                     <td>
                       <button
                         className="edit-btn"
-                        onClick={() => { setEditData(item); setEditErrors({}); }}
+                        onClick={() => {
+                          setEditData({ ...item });
+                          setEditOriginal({ ...item });
+                          setEditErrors({});
+                        }}
                       >
                         Edit
                       </button>
@@ -446,30 +486,20 @@ const WeeklyUpdate = () => {
                 <div key={field} className="field-wrap">
                   <label className="field-label">
                     {FIELD_LABELS[field]}
-                    {field === "project_name" && (
-                      <span className="required-star"> *</span>
-                    )}
-                    {field === "project_id" && (
-                      <span className="disabled-tag"> — Not editable</span>
-                    )}
+                    {field === "project_name" && <span className="required-star"> *</span>}
+                    {field === "project_id" && <span className="disabled-tag"> — Not editable</span>}
                   </label>
                   <input
                     name={field}
                     type={getInputType(field)}
                     value={editData[field] ?? ""}
                     onChange={handleEditChange}
-                    placeholder={
-                      field === "project_id"
-                        ? "Cannot be changed"
-                        : FIELD_PLACEHOLDERS[field]
-                    }
+                    placeholder={field === "project_id" ? "Cannot be changed" : FIELD_PLACEHOLDERS[field]}
                     disabled={field === "project_id"}
                     className={
-                      field === "project_id"
-                        ? "input-disabled"
-                        : editErrors[field]
-                        ? "input-error"
-                        : ""
+                      field === "project_id" ? "input-disabled"
+                      : editErrors[field] ? "input-error"
+                      : ""
                     }
                     required={field === "project_name"}
                     {...(field !== "project_id" ? getInputProps(field) : {})}
@@ -484,18 +514,26 @@ const WeeklyUpdate = () => {
             <div className="action-row">
               <button
                 className="delete-btn"
-                onClick={() => { setEditData(null); setEditErrors({}); }}
+                onClick={() => { setEditData(null); setEditOriginal(null); setEditErrors({}); }}
               >
                 Cancel
               </button>
+
               <button
-                className="primary-btn"
+                className={`primary-btn ${!isDirty ? "btn-disabled" : ""}`}
                 onClick={handleUpdate}
-                disabled={loading}
+                disabled={loading || !isDirty}
+                title={!isDirty ? "No changes made yet" : "Save your changes"}
               >
                 {loading ? "Saving..." : "Save Changes"}
               </button>
             </div>
+
+            {!isDirty && (
+              <p className="no-change-hint">
+                ℹ️ Edit any field above to enable Save Changes.
+              </p>
+            )}
           </div>
         )}
       </div>
