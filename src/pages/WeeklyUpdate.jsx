@@ -69,27 +69,42 @@ const FIELD_PLACEHOLDERS = {
   tree_no_existing:      "e.g. 3000",
 };
 
-// ─── Validation helpers ──────────────────────────────────────────────────────
+// ─── Enhanced Validation with Regex ─────────────────────────────────────────
+const isValidNumber = (value, type) => {
+  if (value === "" || value === null || value === undefined) return true;
+  
+  const strValue = String(value).trim();
+  
+  // Regex for float/decimal numbers (positive only)
+  const floatRegex = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
+  
+  // Regex for integers (positive only)
+  const intRegex = /^(?:0|[1-9]\d*)$/;
+  
+  if (type === 'float') {
+    // Check if it matches float pattern and no alphabets/special chars except decimal
+    if (!floatRegex.test(strValue)) return false;
+    const num = parseFloat(strValue);
+    return !isNaN(num) && isFinite(num) && num >= 0;
+  } else if (type === 'int') {
+    // Check if it matches integer pattern and no alphabets/special chars
+    if (!intRegex.test(strValue)) return false;
+    const num = parseInt(strValue, 10);
+    return !isNaN(num) && isFinite(num) && num >= 0 && String(num) === strValue;
+  }
+  return true;
+};
+
 const isValidProjectId = (id) =>
   typeof id === "string" &&
   id.trim().length > 0 &&
   id.trim().length <= 100 &&
   /^[a-zA-Z0-9_-]+$/.test(id.trim());
 
-const isValidPositiveFloat = (val) => {
-  if (val === "" || val === null || val === undefined) return true;
-  const n = parseFloat(val);
-  return !isNaN(n) && isFinite(n) && n >= 0;
-};
-
-const isValidNonNegativeInt = (val) => {
-  if (val === "" || val === null || val === undefined) return true;
-  const n = Number(val);
-  return Number.isInteger(n) && n >= 0;
-};
-
 const validateProject = (proj, isEdit = false) => {
   const errors = {};
+  
+  // Project ID validation
   if (!isEdit) {
     if (!proj.project_id || proj.project_id.trim() === "") {
       errors.project_id = "Project ID is required.";
@@ -97,39 +112,80 @@ const validateProject = (proj, isEdit = false) => {
       errors.project_id = "Only letters, numbers, hyphens (-) and underscores (_) are allowed (max 100 chars).";
     }
   }
+  
+  // Project Name validation
   if (!proj.project_name || proj.project_name.trim() === "") {
     errors.project_name = "Project Name is required.";
   } else if (proj.project_name.trim().length > 255) {
     errors.project_name = "Project Name must not exceed 255 characters.";
   }
- FLOAT_FIELDS.forEach((field) => {
-  const value = proj[field]?.toString().trim();
-
-  if (value !== "" && !isValidPositiveFloat(value)) {
-    errors[field] = "Only positive numbers allowed (e.g. 12 or 12.50).";
-  }
-});
-
-INT_FIELDS.forEach((field) => {
-  const value = proj[field]?.toString().trim();
-
-  if (value !== "" && !isValidNonNegativeInt(value)) {
-    errors[field] = "Only non-negative whole numbers allowed (e.g. 25).";
-  }
-});
+  
+  // Float fields validation with regex
+  FLOAT_FIELDS.forEach((field) => {
+    const value = proj[field];
+    if (value !== "" && value !== null && value !== undefined) {
+      if (!isValidNumber(value, 'float')) {
+        errors[field] = "Must be a valid positive number (e.g., 12.5, 45.00). No alphabets or special characters allowed.";
+      }
+    }
+  });
+  
+  // Integer fields validation with regex
+  INT_FIELDS.forEach((field) => {
+    const value = proj[field];
+    if (value !== "" && value !== null && value !== undefined) {
+      if (!isValidNumber(value, 'int')) {
+        errors[field] = "Must be a valid whole number (e.g., 25, 100). No decimals, alphabets, or special characters allowed.";
+      }
+    }
+  });
+  
   return errors;
+};
+
+// ─── Real-time input validation for number fields ──────────────────────────
+const validateNumberInput = (value, type) => {
+  if (value === "" || value === null || value === undefined) return true;
+  
+  const strValue = String(value);
+  
+  // Allow only digits and single decimal point for floats
+  if (type === 'float') {
+    const regex = /^\d*\.?\d*$/;
+    return regex.test(strValue);
+  }
+  
+  // Allow only digits for integers
+  if (type === 'int') {
+    const regex = /^\d*$/;
+    return regex.test(strValue);
+  }
+  
+  return true;
 };
 
 const preparePayload = (proj, userId, isEdit = false) => {
   const payload = { ...proj };
-  FLOAT_FIELDS.forEach((f) => { payload[f] = proj[f] !== "" ? parseFloat(proj[f]) : null; });
-  INT_FIELDS.forEach((f) => { payload[f] = proj[f] !== "" ? parseInt(proj[f], 10) : 0; });
+  
+  FLOAT_FIELDS.forEach((f) => { 
+    payload[f] = proj[f] !== "" && proj[f] !== null && proj[f] !== undefined 
+      ? parseFloat(proj[f]) 
+      : null; 
+  });
+  
+  INT_FIELDS.forEach((f) => { 
+    payload[f] = proj[f] !== "" && proj[f] !== null && proj[f] !== undefined 
+      ? parseInt(proj[f], 10) 
+      : 0; 
+  });
+  
   if (!isEdit) {
     payload.created_by = userId;
     payload.updated_by = userId;
   } else {
     payload.updated_by = userId;
   }
+  
   return payload;
 };
 
@@ -206,14 +262,31 @@ const WeeklyUpdate = () => {
     }
   }, [filterText, filterType, dataList]);
 
-  // ── Add form handlers ─────────────────────────────────────────────────────
+  // ── Add form handlers with real-time validation ──────────────────────────
   const handleAddChange = (index, e) => {
+    const { name, value } = e.target;
+    
+    // Real-time validation for number fields
+    if (FLOAT_FIELDS.includes(name)) {
+      if (!validateNumberInput(value, 'float') && value !== "") {
+        return; // Block invalid input
+      }
+    } else if (INT_FIELDS.includes(name)) {
+      if (!validateNumberInput(value, 'int') && value !== "") {
+        return; // Block invalid input
+      }
+    }
+    
     const updated = [...projects];
-    updated[index][e.target.name] = e.target.value;
+    updated[index][name] = value;
     setProjects(updated);
+    
+    // Clear error for this field when user starts typing
     const updatedErrors = [...addErrors];
-    if (updatedErrors[index]) delete updatedErrors[index][e.target.name];
-    setAddErrors(updatedErrors);
+    if (updatedErrors[index] && updatedErrors[index][name]) {
+      delete updatedErrors[index][name];
+      setAddErrors(updatedErrors);
+    }
   };
 
   const addRow = () => {
@@ -227,51 +300,75 @@ const WeeklyUpdate = () => {
     setAddErrors(addErrors.filter((_, i) => i !== index));
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Submit with enhanced error handling ───────────────────────────────────
   const handleAddSubmit = async () => {
+    // Check login
     if (!userId) {
-      setDialog({ show: true, message: "User not logged in. Please login again.", type: "error" });
+      setDialog({ 
+        show: true, 
+        message: "User not logged in. Please login again.", 
+        type: "error" 
+      });
       return;
     }
+    
+    // Validate all projects
     const allErrors = projects.map((p) => validateProject(p, false));
     const hasErrors = allErrors.some((e) => Object.keys(e).length > 0);
+    
     if (hasErrors) {
       setAddErrors(allErrors);
-      setDialog({ show: true, message: "Please fix the errors before submitting.", type: "error" });
+      setDialog({ 
+        show: true, 
+        message: "Please fix the errors before submitting. Check all fields for valid numbers (no alphabets or special characters).", 
+        type: "error" 
+      });
       return;
     }
 
     setLoading(true);
-    let failedCount = 0;
+    let successCount = 0;
+    let failedProjects = [];
 
     for (let project of projects) {
       try {
         const payload = preparePayload(project, userId, false);
         const { ok, data } = await createProject(payload, userId);
-        if (!ok) {
-          failedCount++;
+        
+        if (ok) {
+          successCount++;
+        } else {
+          failedProjects.push({
+            name: project.project_name || project.project_id,
+            error: data.message || "Unknown error"
+          });
           console.error(`Project ${project.project_id} failed:`, data.message);
         }
       } catch (err) {
-        failedCount++;
+        failedProjects.push({
+          name: project.project_name || project.project_id,
+          error: err.message || "Network error"
+        });
         console.error("Network error:", err);
       }
     }
 
     setLoading(false);
 
-    if (failedCount === 0) {
+    if (failedProjects.length === 0) {
       setProjects([{ ...emptyProject }]);
       setAddErrors([{}]);
       setDialog({
         show: true,
-        message: `${projects.length} project(s) submitted successfully!`,
+        message: `✅ ${successCount} project(s) submitted successfully!`,
         type: "success",
       });
     } else {
+      // Show detailed error message
+      const errorMessage = `❌ ${failedProjects.length} project(s) failed.\n\n${failedProjects.map(p => `• ${p.name}: ${p.error}`).join('\n')}`;
       setDialog({
         show: true,
-        message: `${failedCount} project(s) failed to submit. Check console for details.`,
+        message: errorMessage,
         type: "error",
       });
     }
@@ -288,44 +385,86 @@ const WeeklyUpdate = () => {
       }
     } catch (err) {
       console.error("Fetch error:", err);
+      setDialog({
+        show: true,
+        message: "Failed to fetch projects. Please check your connection.",
+        type: "error",
+      });
     }
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  // ── Edit handlers ─────────────────────────────────────────────────────────
+  // ── Edit handlers with real-time validation ────────────────────────────────
   const handleEditChange = (e) => {
-    setEditData({ ...editData, [e.target.name]: e.target.value });
-    if (editErrors[e.target.name]) {
-      setEditErrors({ ...editErrors, [e.target.name]: undefined });
+    const { name, value } = e.target;
+    
+    // Real-time validation for number fields
+    if (FLOAT_FIELDS.includes(name)) {
+      if (!validateNumberInput(value, 'float') && value !== "") {
+        return; // Block invalid input
+      }
+    } else if (INT_FIELDS.includes(name)) {
+      if (!validateNumberInput(value, 'int') && value !== "") {
+        return; // Block invalid input
+      }
+    }
+    
+    setEditData({ ...editData, [name]: value });
+    if (editErrors[name]) {
+      setEditErrors({ ...editErrors, [name]: undefined });
     }
   };
 
   const handleUpdate = async () => {
     if (!userId) {
-      setDialog({ show: true, message: "User not logged in. Please login again.", type: "error" });
+      setDialog({ 
+        show: true, 
+        message: "User not logged in. Please login again.", 
+        type: "error" 
+      });
       return;
     }
+    
     const errors = validateProject(editData, true);
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
+      setDialog({ 
+        show: true, 
+        message: "Please fix the errors before updating.", 
+        type: "error" 
+      });
       return;
     }
+    
     setLoading(true);
     try {
       const payload = preparePayload(editData, userId, true);
       const { ok, data } = await updateProject(editData.project_id, payload, userId);
+      
       if (ok) {
-        setDialog({ show: true, message: "Project updated successfully!", type: "success" });
+        setDialog({ 
+          show: true, 
+          message: "✅ Project updated successfully!", 
+          type: "success" 
+        });
         setEditData(null);
         setEditOriginal(null);
         setEditErrors({});
         fetchData();
       } else {
-        setDialog({ show: true, message: data.message || "Update failed. Please try again.", type: "error" });
+        setDialog({ 
+          show: true, 
+          message: data.message || "Update failed. Please try again.", 
+          type: "error" 
+        });
       }
     } catch (err) {
-      setDialog({ show: true, message: "A network error occurred. Please try again.", type: "error" });
+      setDialog({ 
+        show: true, 
+        message: `Network error: ${err.message || "Please try again."}`, 
+        type: "error" 
+      });
     }
     setLoading(false);
   };
@@ -363,13 +502,17 @@ const WeeklyUpdate = () => {
       console.error("Error fetching history:", error);
       setProjectHistory([]);
       setHistoryTotal(0);
+      setDialog({
+        show: true,
+        message: "Failed to fetch project history.",
+        type: "error",
+      });
     } finally {
       setHistoryLoading(false);
     }
   };
 
   const handleViewHistory = (item) => {
-    // Same project dobara click = toggle band
     if (historyProject?.project_id === item.project_id) {
       setHistoryProject(null);
       setProjectHistory([]);
@@ -396,15 +539,16 @@ const WeeklyUpdate = () => {
 
   // ── Input helpers ─────────────────────────────────────────────────────────
   const getInputType = (field) => {
-    if (FLOAT_FIELDS.includes(field) || INT_FIELDS.includes(field)) return "number";
+    if (FLOAT_FIELDS.includes(field) || INT_FIELDS.includes(field)) return "text";
     return "text";
   };
 
   const getInputProps = (field) => {
-    const base = { min: "0" };
-    if (INT_FIELDS.includes(field))   return { ...base, step: "1" };
-    if (FLOAT_FIELDS.includes(field)) return { ...base, step: "0.01" };
-    return {};
+    const base = { 
+      inputMode: "numeric",
+      pattern: FLOAT_FIELDS.includes(field) ? "[0-9]*\\.?[0-9]*" : "[0-9]*"
+    };
+    return base;
   };
 
   const isDirty = hasChanges(editOriginal, editData);
@@ -424,7 +568,9 @@ const WeeklyUpdate = () => {
             <div className="dialog-icon">
               {dialog.type === "success" ? "✅" : "❌"}
             </div>
-            <p className="dialog-message">{dialog.message}</p>
+            <p className="dialog-message" style={{ whiteSpace: "pre-line" }}>
+              {dialog.message}
+            </p>
             <button
               className="dialog-close-btn"
               onClick={() => setDialog({ show: false, message: "", type: "" })}
@@ -561,7 +707,7 @@ const WeeklyUpdate = () => {
                             setEditData({ ...item });
                             setEditOriginal({ ...item });
                             setEditErrors({});
-                            closeHistory(); // history band karo jab edit khulo
+                            closeHistory();
                           }}
                         >
                           Edit
@@ -569,7 +715,7 @@ const WeeklyUpdate = () => {
                         <button
                           className={`history-btn${historyProject?.project_id === item.project_id ? " history-btn-active" : ""}`}
                           onClick={() => {
-                            setEditData(null); // edit band karo jab history khulo
+                            setEditData(null);
                             setEditOriginal(null);
                             setEditErrors({});
                             handleViewHistory(item);

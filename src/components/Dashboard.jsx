@@ -75,7 +75,7 @@ const Dashboard = () => {
               onClick={() => handleCardClick("/WeeklyUpdate")}
             >
               <div className="card-icon">📊</div>
-              <h2>Weekly data updating</h2>
+              <h2>Active Project Status</h2>
               <p>Track and monitor weekly updates of farmer data, including recent changes, additions, and progress insights.</p>
             </div>
         </div>
