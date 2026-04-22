@@ -69,20 +69,6 @@ const FIELD_PLACEHOLDERS = {
   tree_no_existing:      "e.g. 3000",
 };
 
-// Field display names for better readability
-const FIELD_DISPLAY_NAMES = {
-  area_mapped_new: "Area Mapped (New)",
-  area_mapped_existing: "Area Mapped (Existing)",
-  kml_verified_new: "KML Verified (New)",
-  kml_verified_existing: "KML Verified (Existing)",
-  cra_data_new: "CRA Data (New)",
-  cra_data_existing: "CRA Data (Existing)",
-  farmer_no_new: "Farmer Count (New)",
-  farmer_no_existing: "Farmer Count (Existing)",
-  tree_no_new: "Tree Count (New)",
-  tree_no_existing: "Tree Count (Existing)",
-};
-
 // ─── Validation helpers ──────────────────────────────────────────────────────
 const isValidProjectId = (id) =>
   typeof id === "string" &&
@@ -150,63 +136,21 @@ const hasChanges = (original, current) => {
   });
 };
 
-
 // ─── Format epoch time to readable date time ───────────────────────────────
 const formatEpochToDateTime = (epochTime) => {
   if (!epochTime) return "—";
-  
-  // Convert to number if it's string
-  let timestamp = typeof epochTime === 'string' ? parseInt(epochTime) : epochTime;
-  
-  // Check if timestamp is in seconds (10 digits) or milliseconds (13 digits)
+  let timestamp = typeof epochTime === "string" ? parseInt(epochTime) : epochTime;
   const date = new Date(timestamp < 10000000000 ? timestamp * 1000 : timestamp);
-  
-  // Check if date is valid
   if (isNaN(date.getTime())) return "Invalid Date";
-  
-  // Format as: 21/04/2026, 02:43:51 pm
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  }).replace(/\//g, '/');
-};
-
-// ─── Process history data to show row-wise field changes ───────────────────
-const processHistoryData = (historyRecords) => {
-  const rowWiseData = [];
-  
-  historyRecords.forEach((record) => {
-    // Define all fields that we want to track
-    const fieldsToTrack = [
-      'project_name',
-      'area_mapped_new', 'area_mapped_existing',
-      'kml_verified_new', 'kml_verified_existing',
-      'cra_data_new', 'cra_data_existing',
-      'farmer_no_new', 'farmer_no_existing',
-      'tree_no_new', 'tree_no_existing'
-    ];
-    
-    // For each field, create a row if it exists in the record
-    fieldsToTrack.forEach(field => {
-      if (record.hasOwnProperty(field)) {
-        rowWiseData.push({
-          field_name: FIELD_DISPLAY_NAMES[field] || field,
-          old_value: record[field], // Since this is a history record, this is the value at that time
-          new_value: record[field],
-          updated_by: record.updated_by || record.created_by,
-          updated_at: record.updated_at || record.created_at,
-          action: record.action || "UPDATE"
-        });
-      }
-    });
-  });
-  
-  return rowWiseData;
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).replace(/\//g, "/");
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,14 +167,13 @@ const WeeklyUpdate = () => {
   const [filterType, setFilterType]     = useState("project_name");
   const [loading, setLoading]           = useState(false);
   const [dialog, setDialog]             = useState({ show: false, message: "", type: "" });
-  
-  // History modal states
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(null);
+
+  // ── Inline history states ─────────────────────────────────────────────────
+  const [historyProject, setHistoryProject] = useState(null);
   const [projectHistory, setProjectHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPage, setHistoryPage]       = useState(1);
+  const [historyTotal, setHistoryTotal]     = useState(0);
 
   const userId = getLoggedInUserId();
 
@@ -380,60 +323,68 @@ const WeeklyUpdate = () => {
     setLoading(false);
   };
 
-  // ── History handlers ─────────────────────────────────────────────────────
-  const handleViewHistory = async (project) => {
-    setSelectedProject(project);
-    setShowHistoryModal(true);
-    setHistoryPage(1);
-    await fetchHistoryData(project.project_id, 1);
-  };
-
-const fetchHistoryData = async (projectId, page = 1) => {
-  setHistoryLoading(true);
-  try {
-    const result = await fetchProjectHistory(projectId, page, 200);
-
-    if (result.ok && result.data.success) {
-      const historyData = result.data.data || [];
-
-      // ✅ Direct DB rows show karenge (no transformation)
-      const formattedHistory = historyData.map((record) => ({
-        project_name: record.project_name,
-        area_mapped_new: record.area_mapped_new,
-        area_mapped_existing: record.area_mapped_existing,
-        kml_verified_new: record.kml_verified_new,
-        kml_verified_existing: record.kml_verified_existing,
-        cra_data_new: record.cra_data_new,
-        cra_data_existing: record.cra_data_existing,
-        farmer_no_new: record.farmer_no_new,
-        farmer_no_existing: record.farmer_no_existing,
-        tree_no_new: record.tree_no_new,
-        tree_no_existing: record.tree_no_existing,
-        username: record.username, 
-        updated_by: record.updated_by || record.created_by,
-        updated_at: record.updated_at || record.created_at,
-      }));
-
-      setProjectHistory(formattedHistory);
-      setHistoryTotal(result.data.total || 0);
-    } else {
+  // ── History handlers (inline) ─────────────────────────────────────────────
+  const fetchHistoryData = async (projectId, page = 1) => {
+    setHistoryLoading(true);
+    try {
+      const result = await fetchProjectHistory(projectId, page, 200);
+      if (result.ok && result.data.success) {
+        const historyData = result.data.data || [];
+        const formattedHistory = historyData.map((record) => ({
+          project_name:          record.project_name,
+          area_mapped_new:       record.area_mapped_new,
+          area_mapped_existing:  record.area_mapped_existing,
+          kml_verified_new:      record.kml_verified_new,
+          kml_verified_existing: record.kml_verified_existing,
+          cra_data_new:          record.cra_data_new,
+          cra_data_existing:     record.cra_data_existing,
+          farmer_no_new:         record.farmer_no_new,
+          farmer_no_existing:    record.farmer_no_existing,
+          tree_no_new:           record.tree_no_new,
+          tree_no_existing:      record.tree_no_existing,
+          username:              record.username,
+          updated_by:            record.updated_by || record.created_by,
+          updated_at:            record.updated_at || record.created_at,
+        }));
+        setProjectHistory(formattedHistory);
+        setHistoryTotal(result.data.total || 0);
+      } else {
+        setProjectHistory([]);
+        setHistoryTotal(0);
+      }
+    } catch (error) {
+      console.error("Error fetching history:", error);
       setProjectHistory([]);
       setHistoryTotal(0);
+    } finally {
+      setHistoryLoading(false);
     }
-  } catch (error) {
-    console.error("Error fetching history:", error);
-    setProjectHistory([]);
-    setHistoryTotal(0);
-  } finally {
-    setHistoryLoading(false);
-  }
-};
+  };
+
+  const handleViewHistory = (item) => {
+    // Same project dobara click = toggle band
+    if (historyProject?.project_id === item.project_id) {
+      setHistoryProject(null);
+      setProjectHistory([]);
+      setHistoryTotal(0);
+      return;
+    }
+    setHistoryProject(item);
+    setHistoryPage(1);
+    fetchHistoryData(item.project_id, 1);
+  };
 
   const handleHistoryPageChange = (newPage) => {
-    if (newPage >= 1 && selectedProject) {
+    if (newPage >= 1 && historyProject) {
       setHistoryPage(newPage);
-      fetchHistoryData(selectedProject.project_id, newPage);
+      fetchHistoryData(historyProject.project_id, newPage);
     }
+  };
+
+  const closeHistory = () => {
+    setHistoryProject(null);
+    setProjectHistory([]);
+    setHistoryTotal(0);
   };
 
   // ── Input helpers ─────────────────────────────────────────────────────────
@@ -473,92 +424,6 @@ const fetchHistoryData = async (projectId, page = 1) => {
             >
               OK
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── History Modal ───────────────────────────────────────────────── */}
-      {showHistoryModal && selectedProject && (
-        <div className="modal-overlay" onClick={() => setShowHistoryModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>📜 Project History: {selectedProject.project_id} - {selectedProject.project_name}</h3>
-              <button className="modal-close" onClick={() => setShowHistoryModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {historyLoading ? (
-                <div className="history-loading">Loading history...</div>
-              ) : projectHistory.length === 0 ? (
-                <div className="history-empty">No history records found for this project.</div>
-              ) : (
-                <>
-                  <div className="history-table-wrapper">
-                    <table className="history-table">
-                      <thead>
-                        <tr>
-                            <th>Project Name</th>
-                            <th>Area New</th>
-                            <th>Area Existing</th>
-                            <th>KML New</th>
-                            <th>KML Existing</th>
-                            <th>CRA New</th>
-                            <th>CRA Existing</th>
-                            <th>Farmer New</th>
-                            <th>Farmer Existing</th>
-                            <th>Tree New</th>
-                            <th>Tree Existing</th>
-                            <th>Updated By</th>
-                            <th>Updated At</th>
-                        </tr>
-                        </thead>
-
-                        <tbody>
-                        {projectHistory.map((row, idx) => (
-                            <tr key={idx}>
-                            <td>{row.project_name}</td>
-                            <td>{row.area_mapped_new ?? "—"}</td>
-                            <td>{row.area_mapped_existing ?? "—"}</td>
-                            <td>{row.kml_verified_new ?? "—"}</td>
-                            <td>{row.kml_verified_existing ?? "—"}</td>
-                            <td>{row.cra_data_new ?? "—"}</td>
-                            <td>{row.cra_data_existing ?? "—"}</td>
-                            <td>{row.farmer_no_new ?? "—"}</td>
-                            <td>{row.farmer_no_existing ?? "—"}</td>
-                            <td>{row.tree_no_new ?? "—"}</td>
-                            <td>{row.tree_no_existing ?? "—"}</td>
-                            <td>{row.username || `User ${row.updated_by}`}</td>    
-                        <td>{formatEpochToDateTime(row.updated_at)}</td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                  </div>
-                  
-                  {/* Pagination */}
-                  {historyTotal > 200 && (
-                    <div className="history-pagination">
-                      <button
-                        onClick={() => handleHistoryPageChange(historyPage - 1)}
-                        disabled={historyPage === 1}
-                        className="pagination-btn"
-                      >
-                        ← Previous
-                      </button>
-                      <span className="pagination-info">
-                        Page {historyPage} of {Math.ceil(historyTotal / 200)}
-                      </span>
-                      <button
-                        onClick={() => handleHistoryPageChange(historyPage + 1)}
-                        disabled={historyPage >= Math.ceil(historyTotal / 200)}
-                        className="pagination-btn"
-                      >
-                        Next →
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -689,13 +554,19 @@ const fetchHistoryData = async (projectId, page = 1) => {
                             setEditData({ ...item });
                             setEditOriginal({ ...item });
                             setEditErrors({});
+                            closeHistory(); // history band karo jab edit khulo
                           }}
                         >
                           Edit
                         </button>
                         <button
-                          className="history-btn"
-                          onClick={() => handleViewHistory(item)}
+                          className={`history-btn${historyProject?.project_id === item.project_id ? " history-btn-active" : ""}`}
+                          onClick={() => {
+                            setEditData(null); // edit band karo jab history khulo
+                            setEditOriginal(null);
+                            setEditErrors({});
+                            handleViewHistory(item);
+                          }}
                         >
                           📜 History
                         </button>
@@ -708,7 +579,7 @@ const fetchHistoryData = async (projectId, page = 1) => {
           </table>
         </div>
 
-        {/* ── Edit Form ─────────────────────────────────────────────────── */}
+        {/* ── Edit Form (inline) ────────────────────────────────────────── */}
         {editData && (
           <div className="edit-card">
             <h4>Editing: {editData.project_id}</h4>
@@ -764,6 +635,90 @@ const fetchHistoryData = async (projectId, page = 1) => {
               <p className="no-change-hint">
                 ℹ️ Edit any field above to enable Save Changes.
               </p>
+            )}
+          </div>
+        )}
+
+        {/* ── History Section (inline, same style as edit-card) ────────── */}
+        {historyProject && (
+          <div className="edit-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h4>📜 History: {historyProject.project_id} — {historyProject.project_name}</h4>
+              <button className="delete-btn" onClick={closeHistory}>
+                ✕ Close
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div className="history-loading">Loading history...</div>
+            ) : projectHistory.length === 0 ? (
+              <div className="history-empty">No history records found for this project.</div>
+            ) : (
+              <>
+                <div className="history-table-wrapper">
+                  <table className="history-table">
+                    <thead>
+                      <tr>
+                        <th>Project Name</th>
+                        <th>Area New</th>
+                        <th>Area Existing</th>
+                        <th>KML New</th>
+                        <th>KML Existing</th>
+                        <th>CRA New</th>
+                        <th>CRA Existing</th>
+                        <th>Farmer New</th>
+                        <th>Farmer Existing</th>
+                        <th>Tree New</th>
+                        <th>Tree Existing</th>
+                        <th>Updated By</th>
+                        <th>Updated At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projectHistory.map((row, idx) => (
+                        <tr key={idx}>
+                          <td>{row.project_name}</td>
+                          <td>{row.area_mapped_new ?? "—"}</td>
+                          <td>{row.area_mapped_existing ?? "—"}</td>
+                          <td>{row.kml_verified_new ?? "—"}</td>
+                          <td>{row.kml_verified_existing ?? "—"}</td>
+                          <td>{row.cra_data_new ?? "—"}</td>
+                          <td>{row.cra_data_existing ?? "—"}</td>
+                          <td>{row.farmer_no_new ?? "—"}</td>
+                          <td>{row.farmer_no_existing ?? "—"}</td>
+                          <td>{row.tree_no_new ?? "—"}</td>
+                          <td>{row.tree_no_existing ?? "—"}</td>
+                          <td>{row.username || `User ${row.updated_by}`}</td>
+                          <td>{formatEpochToDateTime(row.updated_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {historyTotal > 200 && (
+                  <div className="history-pagination">
+                    <button
+                      onClick={() => handleHistoryPageChange(historyPage - 1)}
+                      disabled={historyPage === 1}
+                      className="pagination-btn"
+                    >
+                      ← Previous
+                    </button>
+                    <span className="pagination-info">
+                      Page {historyPage} of {Math.ceil(historyTotal / 200)}
+                    </span>
+                    <button
+                      onClick={() => handleHistoryPageChange(historyPage + 1)}
+                      disabled={historyPage >= Math.ceil(historyTotal / 200)}
+                      className="pagination-btn"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
