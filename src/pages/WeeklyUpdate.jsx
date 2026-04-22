@@ -102,14 +102,21 @@ const validateProject = (proj, isEdit = false) => {
   } else if (proj.project_name.trim().length > 255) {
     errors.project_name = "Project Name must not exceed 255 characters.";
   }
-  FLOAT_FIELDS.forEach((field) => {
-    if (proj[field] !== "" && !isValidPositiveFloat(proj[field]))
-      errors[field] = "Must be a positive number (e.g. 12.50).";
-  });
-  INT_FIELDS.forEach((field) => {
-    if (proj[field] !== "" && !isValidNonNegativeInt(proj[field]))
-      errors[field] = "Must be a whole non-negative number (e.g. 25).";
-  });
+ FLOAT_FIELDS.forEach((field) => {
+  const value = proj[field]?.toString().trim();
+
+  if (value !== "" && !isValidPositiveFloat(value)) {
+    errors[field] = "Only positive numbers allowed (e.g. 12 or 12.50).";
+  }
+});
+
+INT_FIELDS.forEach((field) => {
+  const value = proj[field]?.toString().trim();
+
+  if (value !== "" && !isValidNonNegativeInt(value)) {
+    errors[field] = "Only non-negative whole numbers allowed (e.g. 25).";
+  }
+});
   return errors;
 };
 
