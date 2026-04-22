@@ -9,7 +9,6 @@
   background-size: cover;
   background-position: center;
   min-height: 85.6vh;
-  padding: 40px 20px;
   box-sizing: border-box;
 }
 
@@ -17,7 +16,7 @@
 .dashboard-content {
   width: 100%;
   max-width: 1200px;
-  padding-top: 60px;
+  padding-top: 30px;
   padding-right: 30px;
   flex: 1;
 }
