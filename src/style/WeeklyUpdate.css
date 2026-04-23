@@ -461,3 +461,43 @@ table td {
 .history-btn:hover {
   background: #0284c7;
 }
+/* Search Bar - Compact Size */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+  max-width: 400px; /* Chota karne ke liye */
+}
+
+.filter-input {
+  flex: 1;
+  padding: 8px 12px; /* Padding chota kiya */
+  font-size: 14px; /* Font size chota */
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+  transition: all 0.3s ease;
+  height: 36px; /* Fixed height */
+}
+
+.filter-input:focus {
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+}
+
+.filter-clear-btn {
+  padding: 6px 12px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.3s ease;
+  white-space: nowrap;
+}
+
+.filter-clear-btn:hover {
+  background: #d32f2f;
+}

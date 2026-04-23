@@ -226,8 +226,7 @@ const WeeklyUpdate = () => {
   const [editErrors, setEditErrors]     = useState({});
   const [dataList, setDataList]         = useState([]);
   const [filteredList, setFilteredList] = useState([]);
-  const [filterText, setFilterText]     = useState("");
-  const [filterType, setFilterType]     = useState("project_name");
+  const [searchText, setSearchText]     = useState("");
   const [loading, setLoading]           = useState(false);
   const [dialog, setDialog]             = useState({ show: false, message: "", type: "" });
 
@@ -248,19 +247,21 @@ const WeeklyUpdate = () => {
     }
   }, [dialog]);
 
-  // ── Filter logic ──────────────────────────────────────────────────────────
+  // ── Search logic - searches in both project_id and project_name ──────────
   useEffect(() => {
-    if (!filterText.trim()) {
+    if (!searchText.trim()) {
       setFilteredList(dataList);
     } else {
-      const lower = filterText.trim().toLowerCase();
+      const lowerSearch = searchText.trim().toLowerCase();
       setFilteredList(
-        dataList.filter((item) =>
-          String(item[filterType] ?? "").toLowerCase().includes(lower)
-        )
+        dataList.filter((item) => {
+          const projectId = String(item.project_id || "").toLowerCase();
+          const projectName = String(item.project_name || "").toLowerCase();
+          return projectId.includes(lowerSearch) || projectName.includes(lowerSearch);
+        })
       );
     }
-  }, [filterText, filterType, dataList]);
+  }, [searchText, dataList]);
 
   // ── Add form handlers with real-time validation ──────────────────────────
   const handleAddChange = (index, e) => {
@@ -644,29 +645,17 @@ const WeeklyUpdate = () => {
           <h3>Update Projects Data</h3>
         </div>
 
-        {/* ── Filter Bar ──────────────────────────────────────────────── */}
+        {/* ── Search Bar ──────────────────────────────────────────────── */}
         <div className="filter-bar">
-          <select
-            className="filter-select"
-            value={filterType}
-            onChange={(e) => { setFilterType(e.target.value); setFilterText(""); }}
-          >
-            <option value="project_name">Filter by Name</option>
-            <option value="project_id">Filter by Project ID</option>
-          </select>
           <input
             className="filter-input"
             type="text"
-            placeholder={
-              filterType === "project_name"
-                ? "Search by project name..."
-                : "Search by project ID..."
-            }
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Search by Project ID or Project Name..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
           />
-          {filterText && (
-            <button className="filter-clear-btn" onClick={() => setFilterText("")}>
+          {searchText && (
+            <button className="filter-clear-btn" onClick={() => setSearchText("")}>
               ✕ Clear
             </button>
           )}
@@ -688,7 +677,7 @@ const WeeklyUpdate = () => {
               {filteredList.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: "center", padding: "16px" }}>
-                    {filterText ? "No matching records found." : "No records found."}
+                    {searchText ? "No matching records found." : "No records found."}
                   </td>
                 </tr>
               ) : (
