@@ -95,23 +95,23 @@ const Visualization = () => {
 
   // ─── Initial data load ───────────────────────────────────────────────────────
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const farmers = await fetchFarmers(5000);
-      setAllData(farmers);
-      setData(farmers);
-      generateStats(farmers);
-      generateDropdowns(farmers);
-      generateCharts(farmers);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load farmer data. Please check your connection or login again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [generateStats, generateDropdowns, generateCharts]);
+ const loadData = useCallback(async () => {
+  setLoading(true);
+  setError("");
+  try {
+    const farmers = await fetchFarmers(); // ❌ limit hata diya
+    setAllData(farmers);
+    setData(farmers);
+    generateStats(farmers);
+    generateDropdowns(farmers);
+    generateCharts(farmers);
+  } catch (err) {
+    console.error(err);
+    setError("Failed to load farmer data. Please check your connection or login again.");
+  } finally {
+    setLoading(false);
+  }
+}, [generateStats, generateDropdowns, generateCharts]);
 
   useEffect(() => {
     loadData();

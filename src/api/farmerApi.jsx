@@ -43,7 +43,7 @@ apiClient.interceptors.response.use(
  * @param {number} limit - max records to fetch
  * @returns {Promise<Array>} - array of farmer objects
  */
-export const fetchFarmers = async (limit = 5000) => {
+export const fetchFarmers = async (limit = 50000) => {
   const res = await apiClient.get(`/farmerdata?limit=${limit}`);
   return res.data.data;
 };
