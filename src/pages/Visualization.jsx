@@ -273,6 +273,9 @@ const Visualization = () => {
             <p className="dash-subtitle">Agricultural Data Management System</p>
           </div>
         </div>
+         <div className="dash-header-right">
+              <button className="btn-refresh" onClick={loadData} title="Refresh Data">↺ Refresh</button>
+            </div>
       </header>
 
       <main className="dash-main">
@@ -444,9 +447,6 @@ const Visualization = () => {
                   className="header-search-input"
                 />
           </div>
-            <div className="dash-header-right">
-              <button className="btn-refresh" onClick={loadData} title="Refresh Data">↺ Refresh</button>
-            </div>
             <button className="btn-reset" onClick={resetFilters}>
               ↺ Reset All
             </button>
