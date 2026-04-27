@@ -1,89 +1,114 @@
-// Visualization.jsx — UI + Logic for Farmer Dashboard
+// Visualization.jsx — Farmer Dashboard (Updated)
 
 import React, { useEffect, useState, useCallback } from "react";
 import CountUp from "react-countup";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  PieChart, Pie, Cell, ResponsiveContainer, Legend,
+  PieChart, Pie, Cell, ResponsiveContainer,
 } from "recharts";
-import { fetchFarmers, updateFarmer } from "../api/farmerApi"; // ← API layer
+import { fetchFarmers, updateFarmer } from "../api/farmerApi";
 import "../style/Visualization.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const COLORS = ["#4CAF50", "#2196F3", "#FF9800", "#E91E63", "#9C27B0", "#00BCD4"];
+const COLORS = ["#16a34a", "#2563eb", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
 
 const EMPTY_FILTERS = { project: "", state: "", district: "", gp: "" };
 
-// ─── Helper: build chart data from a key ──────────────────────────────────────
+const KPI_META = [
+  { label: "Total Farmers", key: "farmers",   icon: "👨‍🌾", color: "#16a34a" },
+  { label: "States Covered", key: "states",   icon: "🗺️",  color: "#2563eb" },
+  { label: "Districts",      key: "districts",icon: "📍",  color: "#f59e0b" },
+  { label: "Projects",       key: "projects", icon: "📂",  color: "#7c3aed" },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const toChartData = (farmers, key) => {
   const map = {};
-  farmers.forEach((f) => {
-    if (f[key]) map[f[key]] = (map[f[key]] || 0) + 1;
-  });
+  farmers.forEach((f) => { if (f[key]) map[f[key]] = (map[f[key]] || 0) + 1; });
   return Object.entries(map).map(([name, value]) => ({ name, value }));
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+const formatTimestamp = (ts) => {
+  if (!ts) return "—";
+  const date = new Date(Number(ts) * 1000);
+  return isNaN(date) ? ts : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="custom-tooltip">
+        <p className="tooltip-label">{label}</p>
+        <p className="tooltip-value">{payload[0].value} farmers</p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+
+const SectionHeader = ({ icon, title, subtitle, badge }) => (
+  <div className="section-header">
+    <div className="section-header-left">
+      <span className="section-icon">{icon}</span>
+      <div>
+        <h2 className="section-title">{title}</h2>
+        {subtitle && <p className="section-subtitle">{subtitle}</p>}
+      </div>
+    </div>
+    {badge && <span className="section-badge">{badge}</span>}
+  </div>
+);
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const Visualization = () => {
 
-  // ── Data State ──────────────────────────────────────────────────────────────
-
-  const [allData, setAllData]       = useState([]);
-  const [data, setData]             = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState("");
-
-  // ── Chart State ─────────────────────────────────────────────────────────────
+  const [allData, setAllData]   = useState([]);
+  const [data, setData]         = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
 
   const [stateChart, setStateChart]       = useState([]);
   const [districtChart, setDistrictChart] = useState([]);
   const [villageChart, setVillageChart]   = useState([]);
 
-  // ── Filter State ─────────────────────────────────────────────────────────────
-
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [projects, setProjects] = useState([]);
-  const [states, setStates]    = useState([]);
+  const [filters, setFilters]     = useState(EMPTY_FILTERS);
+  const [projects, setProjects]   = useState([]);
+  const [states, setStates]       = useState([]);
   const [districts, setDistricts] = useState([]);
-  const [gps, setGps]          = useState([]);
-
-  // ── Stats State ──────────────────────────────────────────────────────────────
+  const [gps, setGps]             = useState([]);
 
   const [stats, setStats] = useState({ farmers: 0, states: 0, districts: 0, projects: 0 });
-
-  // ── Edit State ───────────────────────────────────────────────────────────────
 
   const [editRow, setEditRow]   = useState(null);
   const [editData, setEditData] = useState({});
   const [saving, setSaving]     = useState(false);
 
-  // ── Pagination State ─────────────────────────────────────────────────────────
-
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const rowsPerPage = 10;
 
-  // ─── Derived chart + stats generators ───────────────────────────────────────
+  // ── Generators ───────────────────────────────────────────────────────────────
 
   const generateStats = useCallback((farmers) => {
     setStats({
-      farmers:  farmers.length,
-      states:   new Set(farmers.map((f) => f.state)).size,
+      farmers:   farmers.length,
+      states:    new Set(farmers.map((f) => f.state)).size,
       districts: new Set(farmers.map((f) => f.district)).size,
-      projects: new Set(farmers.map((f) => f.project_code)).size,
+      projects:  new Set(farmers.map((f) => f.project_code)).size,
     });
   }, []);
 
   const generateCharts = useCallback((farmers) => {
     setStateChart(toChartData(farmers, "state"));
     setDistrictChart(toChartData(farmers, "district"));
-
-    const villages = toChartData(farmers, "village")
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-    setVillageChart(villages);
+    setVillageChart(toChartData(farmers, "village").sort((a, b) => b.value - a.value).slice(0, 10));
   }, []);
 
   const generateDropdowns = useCallback((farmers) => {
@@ -93,31 +118,43 @@ const Visualization = () => {
     setGps([...new Set(farmers.map((f) => f.blocks).filter(Boolean))]);
   }, []);
 
-  // ─── Initial data load ───────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────────
 
- const loadData = useCallback(async () => {
-  setLoading(true);
-  setError("");
-  try {
-    const farmers = await fetchFarmers(); // ❌ limit hata diya
-    setAllData(farmers);
-    setData(farmers);
-    generateStats(farmers);
-    generateDropdowns(farmers);
-    generateCharts(farmers);
-  } catch (err) {
-    console.error(err);
-    setError("Failed to load farmer data. Please check your connection or login again.");
-  } finally {
-    setLoading(false);
-  }
-}, [generateStats, generateDropdowns, generateCharts]);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const farmers = await fetchFarmers();
+      setAllData(farmers);
+      setData(farmers);
+      generateStats(farmers);
+      generateDropdowns(farmers);
+      generateCharts(farmers);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load farmer data. Please check your connection or login again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [generateStats, generateDropdowns, generateCharts]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
+  // show full time 
+    const formatTimestamp = (ts) => {
+      if (!ts) return "—";
+      const date = new Date(Number(ts) * 1000);
+      return isNaN(date) ? ts : date.toLocaleString("en-IN", { 
+        day: "2-digit", 
+        month: "short", 
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true 
+      });
+    };
 
-  // ─── Filter Logic ─────────────────────────────────────────────────────────────
+  // ── Filters ───────────────────────────────────────────────────────────────────
 
   const applyFilters = useCallback((f, source) => {
     let filtered = [...source];
@@ -140,28 +177,46 @@ const Visualization = () => {
 
   const resetFilters = () => {
     setFilters(EMPTY_FILTERS);
+    setSearchQuery("");
     setData(allData);
     generateCharts(allData);
     generateStats(allData);
     setCurrentPage(1);
   };
 
-  // ─── Edit Logic ───────────────────────────────────────────────────────────────
+  // ── Search ────────────────────────────────────────────────────────────────────
+
+  const handleSearch = (e) => {
+    const q = e.target.value.toLowerCase();
+    setSearchQuery(q);
+    const filtered = allData.filter(
+      (f) =>
+        (f.farmer_name || "").toLowerCase().includes(q) ||
+        (f.farmer_id || "").toLowerCase().includes(q) ||
+        (f.village || "").toLowerCase().includes(q)
+    );
+    setData(filtered);
+    generateCharts(filtered);
+    generateStats(filtered);
+    setCurrentPage(1);
+  };
+
+  // ── Edit ──────────────────────────────────────────────────────────────────────
 
   const handleEdit = (farmer) => {
     setEditRow(farmer.farmer_id);
     setEditData({
-      farmer_name:  farmer.farmer_name,
-      state:        farmer.state,
-      district:     farmer.district,
-      village:      farmer.village,
-      project_code: farmer.project_code,
+      farmer_name:   farmer.farmer_name,
+      state:         farmer.state,
+      district:      farmer.district,
+      blocks:        farmer.blocks,
+      grampanchayat: farmer.grampanchayat,
+      village:       farmer.village,
+      project_code:  farmer.project_code,
     });
   };
 
-  const handleEditChange = (e) => {
-    setEditData({ ...editData, [e.target.name]: e.target.value });
-  };
+  const handleEditChange = (e) => setEditData({ ...editData, [e.target.name]: e.target.value });
 
   const handleUpdate = async (id) => {
     setSaving(true);
@@ -171,7 +226,6 @@ const Visualization = () => {
       setEditRow(null);
       loadData();
     } catch (err) {
-      console.error(err);
       alert("Update Failed ❌ — " + (err.response?.data?.message || err.message));
     } finally {
       setSaving(false);
@@ -180,243 +234,338 @@ const Visualization = () => {
 
   const handleCancelEdit = () => setEditRow(null);
 
-  // ─── Pagination ───────────────────────────────────────────────────────────────
+  // ── Pagination ────────────────────────────────────────────────────────────────
 
-  const totalPages   = Math.ceil(data.length / rowsPerPage);
+  const totalPages    = Math.ceil(data.length / rowsPerPage);
   const paginatedData = data.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  // ── Render States ─────────────────────────────────────────────────────────────
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="visualization-container loading-screen">
-        <div className="loader-spinner" />
-        <p>Loading farmer data...</p>
+  if (loading) return (
+    <div className="vis-container loading-screen">
+      <div className="loader-ring">
+        <div /><div /><div /><div />
       </div>
-    );
-  }
+      <p className="loading-text">Loading farmer data...</p>
+      <p className="loading-sub">Fetching records from database</p>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="visualization-container error-screen">
-        <p className="error-msg">⚠️ {error}</p>
-        <button className="reset-btn" onClick={loadData}>Retry</button>
-      </div>
-    );
-  }
+  if (error) return (
+    <div className="vis-container error-screen">
+      <div className="error-icon">⚠️</div>
+      <h3 className="error-title">Something went wrong</h3>
+      <p className="error-msg">{error}</p>
+      <button className="btn-primary" onClick={loadData}>↺ Retry</button>
+    </div>
+  );
+
+  // ── Main Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="visualization-container">
+    <div className="vis-container">
 
-      <h2 className="dashboard-title">🌾 Farmer Dashboard</h2>
-
-      {/* ── KPI CARDS ─────────────────────────────────────────── */}
-
-      <div className="kpi-grid">
-        {[
-          { label: "Total Farmers", value: stats.farmers },
-          { label: "States",        value: stats.states },
-          { label: "Districts",     value: stats.districts },
-          { label: "Projects",      value: stats.projects },
-        ].map(({ label, value }) => (
-          <div className="kpi-card" key={label}>
-            <h4>{label}</h4>
-            <h2><CountUp end={value} duration={2} /></h2>
+      {/* ── TOP NAVBAR ─────────────────────────────────────────── */}
+      <header className="dash-header">
+        <div className="dash-header-left">
+          <div className="dash-logo">🌾</div>
+          <div>
+            <h1 className="dash-title">Farmer Dashboard</h1>
+            <p className="dash-subtitle">Agricultural Data Management System</p>
           </div>
-        ))}
-      </div>
-
-      {/* ── CHARTS ────────────────────────────────────────────── */}
-
-      <div className="charts-grid">
-
-        <div className="chart-card">
-          <h3>Farmers by State</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={stateChart}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#4CAF50" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
         </div>
+      </header>
 
-        <div className="chart-card">
-          <h3>Farmers by District</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={districtChart} dataKey="value" nameKey="name" outerRadius={110} label>
-                {districtChart.map((_, index) => (
-                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
+      <main className="dash-main">
+
+        {/* ── SECTION 1: KPI CARDS ───────────────────────────────── */}
+        <section className="dash-section">
+          <SectionHeader icon="📊" title="Overview" subtitle="Key performance indicators" />
+          <div className="kpi-grid">
+            {KPI_META.map(({ label, key, icon, color }) => (
+              <div className="kpi-card" key={key} style={{ "--kpi-color": color }}>
+                <div className="kpi-icon-wrap">{icon}</div>
+                <div className="kpi-body">
+                  <p className="kpi-label">{label}</p>
+                  <h2 className="kpi-value">
+                    <CountUp end={stats[key]} duration={2} separator="," />
+                  </h2>
+                </div>
+                <div className="kpi-bar" style={{ background: color }} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── SECTION 2: CHARTS ─────────────────────────────────── */}
+        <section className="dash-section">
+          <SectionHeader icon="📈" title="Analytics" subtitle="Visual breakdown of farmer distribution" />
+
+          <div className="charts-grid-2col">
+
+            {/* State Bar Chart */}
+            <div className="chart-card">
+              <div className="chart-card-header">
+                <h3>Farmers by State</h3>
+                <span className="chart-count">{stateChart.length} states</span>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={stateChart} margin={{ top: 5, right: 10, bottom: 30, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-30} textAnchor="end" />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="value" fill="#16a34a" radius={[6, 6, 0, 0]}>
+                    {stateChart.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Top Villages Bar Chart */}
+            <div className="chart-card">
+              <div className="chart-card-header">
+                <h3>Top 10 Villages</h3>
+                <span className="chart-count">by farmer count</span>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={villageChart} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={80} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="value" fill="#2563eb" radius={[0, 6, 6, 0]}>
+                    {villageChart.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+          </div>
+
+          {/* District Pie + List */}
+          <div className="chart-card district-card">
+            <div className="chart-card-header">
+              <h3>Farmers by District</h3>
+              <span className="chart-count">{districtChart.length} districts</span>
+            </div>
+            <div className="district-layout">
+              <div className="district-pie">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie data={districtChart} dataKey="value" nameKey="name" outerRadius={120} innerRadius={50} paddingAngle={2} label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}>
+                      {districtChart.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val) => [`${val} farmers`, "Count"]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="district-list">
+                {districtChart.map((entry, i) => (
+                  <div key={i} className="legend-row">
+                    <span className="legend-dot" style={{ background: COLORS[i % COLORS.length] }} />
+                    <span className="legend-name">{entry.name}</span>
+                    <div className="legend-bar-wrap">
+                      <div
+                        className="legend-bar-fill"
+                        style={{
+                          width: `${(entry.value / Math.max(...districtChart.map(d => d.value))) * 100}%`,
+                          background: COLORS[i % COLORS.length],
+                        }}
+                      />
+                    </div>
+                    <span className="legend-val">{entry.value}</span>
+                  </div>
                 ))}
-              </Pie>
-              <Legend />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-card">
-          <h3>Top 10 Villages</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={villageChart}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#2196F3" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-      </div>
-
-      {/* ── FILTERS ───────────────────────────────────────────── */}
-
-      <div className="filters-container">
-
-        <div className="filter-item">
-          <label>PROJECT</label>
-          <select name="project" value={filters.project} onChange={handleFilter}>
-            <option value="">All Projects</option>
-            {projects.map((p, i) => <option key={i} value={p}>{p}</option>)}
-          </select>
-        </div>
-
-        <div className="filter-item">
-          <label>FROM DATE</label>
-          <input type="date" />
-        </div>
-
-        <div className="filter-item">
-          <label>TO DATE</label>
-          <input type="date" />
-        </div>
-
-        <div className="filter-item">
-          <label>STATE</label>
-          <select name="state" value={filters.state} onChange={handleFilter}>
-            <option value="">All States</option>
-            {states.map((s, i) => <option key={i} value={s}>{s}</option>)}
-          </select>
-        </div>
-
-        <div className="filter-item">
-          <label>DISTRICT</label>
-          <select name="district" value={filters.district} onChange={handleFilter}>
-            <option value="">All Districts</option>
-            {districts.map((d, i) => <option key={i} value={d}>{d}</option>)}
-          </select>
-        </div>
-
-        <div className="filter-item">
-          <label>GP/IP</label>
-          <select name="gp" value={filters.gp} onChange={handleFilter}>
-            <option value="">All GP/IPs</option>
-            {gps.map((g, i) => <option key={i} value={g}>{g}</option>)}
-          </select>
-        </div>
-
-        <button className="reset-btn" onClick={resetFilters} title="Reset Filters">⟳</button>
-
-      </div>
-
-      {/* ── TABLE ─────────────────────────────────────────────── */}
-
-      <div className="table-card">
-
-        <div className="table-header-row">
-          <h3>Farmer Data</h3>
-          <span className="record-count">Showing {data.length} records</span>
-        </div>
-
-        <div className="table-scroll">
-          <table className="farmer-table">
-            <thead>
-              <tr>
-                <th>Farmer ID</th>
-                <th>Name</th>
-                <th>State</th>
-                <th>District</th>
-                <th>Village</th>
-                <th>Project</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedData.map((f, i) => (
-                <tr key={i}>
-
-                  <td>{f.farmer_id}</td>
-
-                  {/* Editable fields */}
-                  {["farmer_name", "state", "district", "village", "project_code"].map((field) => (
-                    <td key={field}>
-                      {editRow === f.farmer_id ? (
-                        <input
-                          name={field}
-                          value={editData[field] || ""}
-                          onChange={handleEditChange}
-                          className="edit-input"
-                        />
-                      ) : (
-                        f[field]
-                      )}
-                    </td>
-                  ))}
-
-                  {/* Action buttons */}
-                  <td>
-                    {editRow === f.farmer_id ? (
-                      <div className="action-btns">
-                        <button
-                          className="save-btn"
-                          onClick={() => handleUpdate(f.farmer_id)}
-                          disabled={saving}
-                        >
-                          {saving ? "Saving..." : "Save"}
-                        </button>
-                        <button className="cancel-btn" onClick={handleCancelEdit}>
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button className="edit-btn" onClick={() => handleEdit(f)}>
-                        Edit
-                      </button>
-                    )}
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="pagination">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              disabled={currentPage === 1}
-            >
-              ← Prev
-            </button>
-
-            <span>Page {currentPage} of {totalPages}</span>
-
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              disabled={currentPage === totalPages}
-            >
-              Next →
-            </button>
+              </div>
+            </div>
           </div>
-        )}
 
-      </div>
+        </section>
+
+        {/* ── SECTION 3: FILTERS ────────────────────────────────── */}
+        <section className="dash-section">
+          <SectionHeader icon="🔽" title="Filters" subtitle="Narrow down records by category" />
+          <div className="filter-panel">
+
+            <div className="filter-group">
+              <label className="filter-label">PROJECT</label>
+              <select name="project" value={filters.project} onChange={handleFilter} className="filter-select">
+                <option value="">All Projects</option>
+                {projects.map((p, i) => <option key={i} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label className="filter-label">FROM DATE</label>
+              <input type="date" className="filter-input" />
+            </div>
+
+            <div className="filter-group">
+              <label className="filter-label">TO DATE</label>
+              <input type="date" className="filter-input" />
+            </div>
+
+            <div className="filter-group">
+              <label className="filter-label">STATE</label>
+              <select name="state" value={filters.state} onChange={handleFilter} className="filter-select">
+                <option value="">All States</option>
+                {states.map((s, i) => <option key={i} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label className="filter-label">DISTRICT</label>
+              <select name="district" value={filters.district} onChange={handleFilter} className="filter-select">
+                <option value="">All Districts</option>
+                {districts.map((d, i) => <option key={i} value={d}>{d}</option>)}
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label className="filter-label">GP / IP</label>
+              <select name="gp" value={filters.gp} onChange={handleFilter} className="filter-select">
+                <option value="">All GP/IPs</option>
+                {gps.map((g, i) => <option key={i} value={g}>{g}</option>)}
+              </select>
+            </div>
+              <div className="dash-header-right">
+          <div className="header-search">
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              placeholder="Search farmer, ID, village..."
+              value={searchQuery}
+              onChange={handleSearch}
+              className="header-search-input"
+            />
+          </div>
+          <button className="btn-refresh" onClick={loadData} title="Refresh Data">↺ Refresh</button>
+        </div>
+
+            <button className="btn-reset" onClick={resetFilters}>
+              ↺ Reset All
+            </button>
+
+          </div>
+        </section>
+
+        {/* ── SECTION 4: TABLE ──────────────────────────────────── */}
+        <section className="dash-section">
+          <SectionHeader
+            icon="📋"
+            title="Farmer Records"
+            subtitle="View, search and edit farmer data"
+            badge={`${data.length} records`}
+          />
+
+          <div className="table-card">
+            <div className="table-scroll">
+              <table className="farmer-table">
+                <thead>
+                  <tr>
+                    {["Farmer ID", "Name", "State", "District", "Block", "Gram Panchayat", "Village", "Project code", "Onboarding Date", "Updated At", "Updated By", "Action"]
+                      .map((h) => <th key={h}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedData.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} className="empty-row">
+                        <div className="empty-state">
+                          <span className="empty-icon">🔍</span>
+                          <p>No records found for selected filters.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedData.map((f, i) => (
+                      <tr key={i} className={editRow === f.farmer_id ? "editing-row" : ""}>
+
+                        <td><span className="farmer-id">{f.farmer_id}</span></td>
+
+                        {["farmer_name", "state", "district", "blocks", "grampanchayat", "village", "project_code"].map((field) => (
+                          <td key={field}>
+                            {editRow === f.farmer_id ? (
+                              <input
+                                name={field}
+                                value={editData[field] || ""}
+                                onChange={handleEditChange}
+                                className="edit-input"
+                              />
+                            ) : (
+                              f[field] ?? <span className="null-val">—</span>
+                            )}
+                          </td>
+                        ))}
+
+                        <td>{f.onboarding_date ? formatTimestamp(f.onboarding_date) : <span className="null-val">—</span>}</td>
+                        <td>{f.updated_at ? formatTimestamp(f.updated_at) : <span className="null-val">—</span>}</td>
+                        <td>{f.username ?? <span className="null-val">—</span>}</td>
+
+                        <td>
+                          {editRow === f.farmer_id ? (
+                            <div className="action-btns">
+                              <button className="btn-save" onClick={() => handleUpdate(f.farmer_id)} disabled={saving}>
+                                {saving ? "..." : "✓ Save"}
+                              </button>
+                              <button className="btn-cancel" onClick={handleCancelEdit}>Cancel</button>
+                            </div>
+                          ) : (
+                            <button className="btn-edit" onClick={() => handleEdit(f)}>Edit</button>
+                          )}
+                        </td>
+
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="pg-btn">«</button>
+                <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} className="pg-btn">‹ Prev</button>
+
+                <div className="pg-numbers">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const start = Math.max(1, currentPage - 2);
+                    const page  = start + i;
+                    if (page > totalPages) return null;
+                    return (
+                      <button
+                        key={page}
+                        className={`pg-num ${page === currentPage ? "active" : ""}`}
+                        onClick={() => setCurrentPage(page)}
+                      >{page}</button>
+                    );
+                  })}
+                </div>
+
+                <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="pg-btn">Next ›</button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="pg-btn">»</button>
+
+                <span className="pg-info">Page {currentPage} of {totalPages}</span>
+              </div>
+            )}
+
+          </div>
+        </section>
+
+      </main>
+
+      {/* ── FOOTER ────────────────────────────────────────────── */}
+      <footer className="dash-footer">
+        <span>🌾 Farmer Dashboard &copy; {new Date().getFullYear()}</span>
+        <span>Total Records: {allData.length}</span>
+      </footer>
 
     </div>
   );
