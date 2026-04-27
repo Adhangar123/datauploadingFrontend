@@ -11,6 +11,7 @@
   color: #222;
 }
 
+/* ── CARDS ─────────────────────────────────────────────────────────── */
 .card {
   background: #fff;
   padding: 20px;
@@ -25,107 +26,93 @@
   padding-bottom: 8px;
 }
 
+.card-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+/* ── FORM GRID (Add Section) ───────────────────────────────────────── */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+@media (max-width: 1200px) {
+  .form-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+.required-star {
+  color: #e53e3e;
+  margin-left: 2px;
+}
+
+.disabled-tag {
+  font-size: 10px;
+  font-weight: normal;
+  color: #999;
+  margin-left: 5px;
 }
 
 .form-grid input {
-  padding: 10px;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
   border: 1px solid #ddd;
   transition: 0.2s;
+  font-size: 13px;
 }
 
 .form-grid input:focus {
   border-color: #007bff;
   outline: none;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
 }
 
-.action-row {
-  margin-top: 10px;
-  display: flex;
-  gap: 10px;
+.form-grid input:disabled {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
 }
 
-.primary-btn {
-  background: #007bff;
-  color: #fff;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.primary-btn:hover {
-  background: #0056b3;
-}
-
-.add-btn {
-  background: #28a745;
-  color: #fff;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 8px;
-}
-
-.delete-btn {
-  background: #ff4d4f;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-}
-
-.table-wrapper {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-table th {
-  background: #f1f3f5;
-  padding: 10px;
-  text-align: left;
-}
-
-table td {
-  padding: 10px;
-  border-top: 1px solid #eee;
-}
-
-.edit-btn {
-  background: #ffc107;
-  border: none;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.edit-card {
-  margin-top: 20px;
-  padding: 15px;
-  background: #f9fafc;
-  border-radius: 10px;
-}
-
-.toast {
-  text-align: center;
-  margin-bottom: 15px;
-  color: green;
-  font-weight: bold;
-}
-/* Error state input */
 .input-error {
   border-color: #e53e3e !important;
   background: #fff5f5;
 }
 
-/* Error message text */
+.input-disabled {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
 .error-msg {
   display: block;
   font-size: 11px;
@@ -133,39 +120,35 @@ table td {
   margin-top: 3px;
 }
 
-/* Error toast */
-.toast-error {
-  background: #e53e3e;
-}
-
-/* field-wrap: input + error message ek saath */
-.field-wrap {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Row separator in add form */
+/* ── FORM SECTION (Add Form Multiple Entries) ───────────────────────── */
 .form-section {
   border-bottom: 1px solid #eee;
-  padding-bottom: 12px;
+  padding-bottom: 15px;
+  margin-bottom: 15px;
+}
+
+.form-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.form-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
 }
 
 .row-label {
   font-size: 12px;
   font-weight: 600;
-  color: #888;
-  margin-bottom: 6px;
-}
-/* Row header: label left, remove button right */
-.form-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+  color: #182428;;
+  background: #f0f0f0;
+  padding: 4px 10px;
+  border-radius: 15px;
 }
 
-/* Remove entry button — top right of each row */
 .remove-entry-btn {
   background: transparent;
   border: 1px solid #e53e3e;
@@ -182,7 +165,304 @@ table td {
   background: #e53e3e;
   color: #fff;
 }
-/* ── Dialog Overlay ────────────────────────────────────────────────────────── */
+
+/* ── ACTION ROWS ────────────────────────────────────────────────────── */
+.action-row {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.primary-btn {
+  background: #007bff;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.add-btn {
+  background: #28a745;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.add-btn:hover {
+  background: #218838;
+}
+
+.delete-btn {
+  background: #ff4d4f;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.delete-btn:hover {
+  background: #e60000;
+}
+
+.btn-disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
+
+/* ── SEARCH BAR ─────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+  max-width: 450px;
+}
+
+.filter-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+  transition: all 0.3s ease;
+  height: 38px;
+}
+
+.filter-input:focus {
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+}
+
+.filter-clear-btn {
+  padding: 6px 12px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.3s ease;
+  white-space: nowrap;
+  height: 38px;
+}
+
+.filter-clear-btn:hover {
+  background: #d32f2f;
+}
+
+/* ── DATA TABLE (Project List) ──────────────────────────────────────── */
+.table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.data-table thead {
+  background: #f1f3f5;
+}
+
+.data-table th {
+  padding: 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #182428;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.data-table td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+  font-weight: 500;
+  color: #182428;
+}
+
+.data-table tbody tr:hover {
+  background: #f9f9f9;
+}
+
+/* ── DROPDOWN BUTTONS ───────────────────────────────────────────────── */
+.dropdown-btn {
+  background: #3c5264;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+  min-width: 100px;
+}
+
+.dropdown-btn:hover {
+  background: #5a6268;
+  transform: translateY(-1px);
+}
+
+.dropdown-btn.active {
+  background: #28a745;
+}
+
+.dropdown-btn.active:hover {
+  background: #218838;
+}
+
+/* ── DROPDOWN ROW & CONTENT ─────────────────────────────────────────── */
+.dropdown-row {
+  background: #f8f9fa;
+}
+
+.dropdown-row td {
+  padding: 0;
+  border-bottom: none;
+}
+
+.dropdown-content {
+  padding: 20px;
+  background: #f8f9fa;
+  border-top: 2px solid #007bff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* Edit Card (now inside dropdown) */
+.dropdown-content h4 {
+  margin: 0 0 15px 0;
+  color: #007bff;
+  font-size: 16px;
+}
+
+.dropdown-content .form-grid {
+  margin-bottom: 15px;
+}
+
+.no-change-hint {
+  font-size: 12px;
+  color: #888;
+  margin-top: 10px;
+  text-align: right;
+  font-style: italic;
+}
+
+/* ── HISTORY TABLE (Inside Dropdown) ─────────────────────────────────── */
+.history-table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 15px;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1200px;
+}
+
+.history-table thead {
+  background: #f1f5f9;
+}
+
+.history-table th {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.history-table td {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.history-table tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.history-table tbody tr:hover {
+  background: #e0f2fe;
+  transition: 0.2s;
+}
+
+.history-loading,
+.history-empty {
+  text-align: center;
+  padding: 30px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* ── PAGINATION ─────────────────────────────────────────────────────── */
+.history-pagination {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+}
+
+.pagination-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.pagination-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #475569;
+}
+
+/* ── DIALOG (Toast/Alert) ───────────────────────────────────────────── */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -201,116 +481,6 @@ table td {
   min-width: 300px;
   max-width: 420px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-}
-
-.dialog-success { border-top: 5px solid #38a169; }
-.dialog-error   { border-top: 5px solid #e53e3e; }
-
-.dialog-icon { font-size: 40px; margin-bottom: 12px; }
-
-.dialog-message {
-  font-size: 15px;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 20px;
-  line-height: 1.5;
-}
-
-.dialog-close-btn {
-  background: #2d7a4f;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 32px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.dialog-close-btn:hover { background: #256040; }
-.dialog-error .dialog-close-btn { background: #e53e3e; }
-.dialog-error .dialog-close-btn:hover { background: #c53030; }
-
-/* ── Filter Bar ─────────────────────────────────────────────────────────────── */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-
-.filter-select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 13px;
-  background: #fff;
-  cursor: pointer;
-  outline: none;
-}
-
-.filter-input {
-  flex: 1;
-  min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.filter-input:focus { border-color: #2d7a4f; }
-
-.filter-clear-btn {
-  background: transparent;
-  border: 1px solid #ccc;
-  color: #666;
-  padding: 7px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.filter-clear-btn:hover { border-color: #e53e3e; color: #e53e3e; }
-
-/* ── Disabled Save Button ───────────────────────────────────────────────────── */
-.btn-disabled {
-  opacity: 0.45 !important;
-  cursor: not-allowed !important;
-}
-
-/* ── No change hint ─────────────────────────────────────────────────────────── */
-.no-change-hint {
-  font-size: 12px;
-  color: #888;
-  margin-top: 8px;
-  text-align: right;
-}
-/* ───────────────── MODAL OVERLAY ───────────────── */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-}
-
-/* ───────────────── MODAL BOX ───────────────── */
-.modal-content {
-  background: #fff;
-  width: 95%;
-  max-width: 1300px;
-  max-height: 90vh;
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
   animation: fadeInScale 0.25s ease;
 }
 
@@ -325,179 +495,114 @@ table td {
   }
 }
 
-/* ───────────────── HEADER ───────────────── */
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #1e293b;
-  color: #fff;
-  padding: 14px 20px;
+.dialog-success { 
+  border-top: 5px solid #38a169; 
 }
 
-.modal-header h3 {
-  font-size: 16px;
-  font-weight: 600;
+.dialog-error { 
+  border-top: 5px solid #e53e3e; 
 }
 
-.modal-close {
-  background: transparent;
-  border: none;
-  font-size: 20px;
-  color: #fff;
-  cursor: pointer;
+.dialog-icon { 
+  font-size: 40px; 
+  margin-bottom: 12px; 
 }
 
-/* ───────────────── BODY ───────────────── */
-.modal-body {
-  padding: 16px;
-  overflow-y: auto;
-}
-
-/* ───────────────── TABLE WRAPPER ───────────────── */
-.history-table-wrapper {
-  overflow-x: auto;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
-}
-
-/* ───────────────── TABLE ───────────────── */
-.history-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1100px;
-}
-
-/* HEADER */
-.history-table thead {
-  background: #f1f5f9;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.history-table th {
-  padding: 10px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-/* ROWS */
-.history-table td {
-  padding: 10px;
-  text-align: center;
-  font-size: 13px;
-  color: #1e293b;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-/* ZEBRA STRIPES */
-.history-table tbody tr:nth-child(even) {
-  background: #f9fafb;
-}
-
-/* HOVER EFFECT */
-.history-table tbody tr:hover {
-  background: #e0f2fe;
-  transition: 0.2s;
-}
-
-/* ───────────────── EMPTY / LOADING ───────────────── */
-.history-loading,
-.history-empty {
-  text-align: center;
-  padding: 30px;
-  font-size: 14px;
-  color: #64748b;
-}
-
-/* ───────────────── PAGINATION ───────────────── */
-.history-pagination {
-  margin-top: 14px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-}
-
-.pagination-btn {
-  background: #2563eb;
-  color: white;
-  border: none;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.pagination-btn:hover {
-  background: #1d4ed8;
-}
-
-.pagination-btn:disabled {
-  background: #94a3b8;
-  cursor: not-allowed;
-}
-
-.pagination-info {
-  font-size: 13px;
-  color: #475569;
-}
-
-/* ───────────────── BUTTON (History Button) ───────────────── */
-.history-btn {
-  background: #0ea5e9;
-  border: none;
-  padding: 6px 10px;
-  color: #fff;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.history-btn:hover {
-  background: #0284c7;
-}
-/* Search Bar - Compact Size */
-.filter-bar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+.dialog-message {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
   margin-bottom: 20px;
-  max-width: 400px; /* Chota karne ke liye */
+  line-height: 1.5;
+  white-space: pre-line;
 }
 
-.filter-input {
-  flex: 1;
-  padding: 8px 12px; /* Padding chota kiya */
-  font-size: 14px; /* Font size chota */
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  outline: none;
-  transition: all 0.3s ease;
-  height: 36px; /* Fixed height */
-}
-
-.filter-input:focus {
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
-}
-
-.filter-clear-btn {
-  padding: 6px 12px;
-  background: #f44336;
-  color: white;
+.dialog-close-btn {
+  background: #2d7a4f;
+  color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
+  padding: 10px 32px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 12px;
-  transition: background 0.3s ease;
-  white-space: nowrap;
+  transition: background 0.2s;
 }
 
-.filter-clear-btn:hover {
-  background: #d32f2f;
+.dialog-close-btn:hover { 
+  background: #256040; 
+}
+
+.dialog-error .dialog-close-btn { 
+  background: #e53e3e; 
+}
+
+.dialog-error .dialog-close-btn:hover { 
+  background: #c53030; 
+}
+
+/* ── RESPONSIVE DESIGN ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .page {
+    padding: 15px;
+  }
+  
+  .card {
+    padding: 15px;
+  }
+  
+  .action-row {
+    flex-direction: column;
+  }
+  
+  .action-row button {
+    width: 100%;
+  }
+  
+  .filter-bar {
+    max-width: 100%;
+    flex-direction: column;
+  }
+  
+  .filter-input,
+  .filter-clear-btn {
+    width: 100%;
+  }
+  
+  .dropdown-btn {
+    min-width: 80px;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 8px;
+    font-size: 12px;
+  }
+  
+  .dialog-box {
+    padding: 20px 25px;
+    margin: 0 15px;
+  }
+}
+
+/* ── SCROLLBAR STYLING ───────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #5a5b56;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }

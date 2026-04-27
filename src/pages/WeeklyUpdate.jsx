@@ -75,19 +75,14 @@ const isValidNumber = (value, type) => {
   
   const strValue = String(value).trim();
   
-  // Regex for float/decimal numbers (positive only)
   const floatRegex = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
-  
-  // Regex for integers (positive only)
   const intRegex = /^(?:0|[1-9]\d*)$/;
   
   if (type === 'float') {
-    // Check if it matches float pattern and no alphabets/special chars except decimal
     if (!floatRegex.test(strValue)) return false;
     const num = parseFloat(strValue);
     return !isNaN(num) && isFinite(num) && num >= 0;
   } else if (type === 'int') {
-    // Check if it matches integer pattern and no alphabets/special chars
     if (!intRegex.test(strValue)) return false;
     const num = parseInt(strValue, 10);
     return !isNaN(num) && isFinite(num) && num >= 0 && String(num) === strValue;
@@ -104,7 +99,6 @@ const isValidProjectId = (id) =>
 const validateProject = (proj, isEdit = false) => {
   const errors = {};
   
-  // Project ID validation
   if (!isEdit) {
     if (!proj.project_id || proj.project_id.trim() === "") {
       errors.project_id = "Project ID is required.";
@@ -113,14 +107,12 @@ const validateProject = (proj, isEdit = false) => {
     }
   }
   
-  // Project Name validation
   if (!proj.project_name || proj.project_name.trim() === "") {
     errors.project_name = "Project Name is required.";
   } else if (proj.project_name.trim().length > 255) {
     errors.project_name = "Project Name must not exceed 255 characters.";
   }
   
-  // Float fields validation with regex
   FLOAT_FIELDS.forEach((field) => {
     const value = proj[field];
     if (value !== "" && value !== null && value !== undefined) {
@@ -130,7 +122,6 @@ const validateProject = (proj, isEdit = false) => {
     }
   });
   
-  // Integer fields validation with regex
   INT_FIELDS.forEach((field) => {
     const value = proj[field];
     if (value !== "" && value !== null && value !== undefined) {
@@ -143,24 +134,17 @@ const validateProject = (proj, isEdit = false) => {
   return errors;
 };
 
-// ─── Real-time input validation for number fields ──────────────────────────
 const validateNumberInput = (value, type) => {
   if (value === "" || value === null || value === undefined) return true;
-  
   const strValue = String(value);
-  
-  // Allow only digits and single decimal point for floats
   if (type === 'float') {
     const regex = /^\d*\.?\d*$/;
     return regex.test(strValue);
   }
-  
-  // Allow only digits for integers
   if (type === 'int') {
     const regex = /^\d*$/;
     return regex.test(strValue);
   }
-  
   return true;
 };
 
@@ -189,7 +173,6 @@ const preparePayload = (proj, userId, isEdit = false) => {
   return payload;
 };
 
-// ─── Check if edit form has any changes ──────────────────────────────────────
 const hasChanges = (original, current) => {
   if (!original || !current) return false;
   return Object.keys(emptyProject).some((key) => {
@@ -199,7 +182,6 @@ const hasChanges = (original, current) => {
   });
 };
 
-// ─── Format epoch time to readable date time ───────────────────────────────
 const formatEpochToDateTime = (epochTime) => {
   if (!epochTime) return "—";
   let timestamp = typeof epochTime === "string" ? parseInt(epochTime) : epochTime;
@@ -230,7 +212,10 @@ const WeeklyUpdate = () => {
   const [loading, setLoading]           = useState(false);
   const [dialog, setDialog]             = useState({ show: false, message: "", type: "" });
 
-  // ── Inline history states ─────────────────────────────────────────────────
+  // ── Dropdown states ─────────────────────────────────────────────────
+  const [openDropdownId, setOpenDropdownId] = useState(null); // Track which dropdown is open
+  const [dropdownType, setDropdownType] = useState(null); // Track type: 'edit' or 'history'
+  
   const [historyProject, setHistoryProject] = useState(null);
   const [projectHistory, setProjectHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -247,7 +232,7 @@ const WeeklyUpdate = () => {
     }
   }, [dialog]);
 
-  // ── Search logic - searches in both project_id and project_name ──────────
+  // ── Search logic ──────────────────────────────────────────
   useEffect(() => {
     if (!searchText.trim()) {
       setFilteredList(dataList);
@@ -263,18 +248,17 @@ const WeeklyUpdate = () => {
     }
   }, [searchText, dataList]);
 
-  // ── Add form handlers with real-time validation ──────────────────────────
+  // ── Add form handlers ──────────────────────────────────────────
   const handleAddChange = (index, e) => {
     const { name, value } = e.target;
     
-    // Real-time validation for number fields
     if (FLOAT_FIELDS.includes(name)) {
       if (!validateNumberInput(value, 'float') && value !== "") {
-        return; // Block invalid input
+        return;
       }
     } else if (INT_FIELDS.includes(name)) {
       if (!validateNumberInput(value, 'int') && value !== "") {
-        return; // Block invalid input
+        return;
       }
     }
     
@@ -282,7 +266,6 @@ const WeeklyUpdate = () => {
     updated[index][name] = value;
     setProjects(updated);
     
-    // Clear error for this field when user starts typing
     const updatedErrors = [...addErrors];
     if (updatedErrors[index] && updatedErrors[index][name]) {
       delete updatedErrors[index][name];
@@ -301,9 +284,7 @@ const WeeklyUpdate = () => {
     setAddErrors(addErrors.filter((_, i) => i !== index));
   };
 
-  // ── Submit with enhanced error handling ───────────────────────────────────
   const handleAddSubmit = async () => {
-    // Check login
     if (!userId) {
       setDialog({ 
         show: true, 
@@ -313,7 +294,6 @@ const WeeklyUpdate = () => {
       return;
     }
     
-    // Validate all projects
     const allErrors = projects.map((p) => validateProject(p, false));
     const hasErrors = allErrors.some((e) => Object.keys(e).length > 0);
     
@@ -343,14 +323,12 @@ const WeeklyUpdate = () => {
             name: project.project_name || project.project_id,
             error: data.message || "Unknown error"
           });
-          console.error(`Project ${project.project_id} failed:`, data.message);
         }
       } catch (err) {
         failedProjects.push({
           name: project.project_name || project.project_id,
           error: err.message || "Network error"
         });
-        console.error("Network error:", err);
       }
     }
 
@@ -365,7 +343,6 @@ const WeeklyUpdate = () => {
         type: "success",
       });
     } else {
-      // Show detailed error message
       const errorMessage = `❌ ${failedProjects.length} project(s) failed.\n\n${failedProjects.map(p => `• ${p.name}: ${p.error}`).join('\n')}`;
       setDialog({
         show: true,
@@ -376,7 +353,6 @@ const WeeklyUpdate = () => {
     fetchData();
   };
 
-  // ── Fetch list ────────────────────────────────────────────────────────────
   const fetchData = async () => {
     try {
       const data = await fetchProjects(100);
@@ -396,18 +372,17 @@ const WeeklyUpdate = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  // ── Edit handlers with real-time validation ────────────────────────────────
+  // ── Edit handlers ────────────────────────────────────────────────
   const handleEditChange = (e) => {
     const { name, value } = e.target;
     
-    // Real-time validation for number fields
     if (FLOAT_FIELDS.includes(name)) {
       if (!validateNumberInput(value, 'float') && value !== "") {
-        return; // Block invalid input
+        return;
       }
     } else if (INT_FIELDS.includes(name)) {
       if (!validateNumberInput(value, 'int') && value !== "") {
-        return; // Block invalid input
+        return;
       }
     }
     
@@ -449,6 +424,8 @@ const WeeklyUpdate = () => {
           message: "✅ Project updated successfully!", 
           type: "success" 
         });
+        setOpenDropdownId(null);
+        setDropdownType(null);
         setEditData(null);
         setEditOriginal(null);
         setEditErrors({});
@@ -470,7 +447,44 @@ const WeeklyUpdate = () => {
     setLoading(false);
   };
 
-  // ── History handlers (inline) ─────────────────────────────────────────────
+  // ── Dropdown Toggle Function (Accordion Style) ─────────────────────────────────
+  const toggleDropdown = (item, type) => {
+    // If same dropdown is open, close it
+    if (openDropdownId === item.project_id && dropdownType === type) {
+      setOpenDropdownId(null);
+      setDropdownType(null);
+      setEditData(null);
+      setEditOriginal(null);
+      setEditErrors({});
+      setHistoryProject(null);
+      setProjectHistory([]);
+    } else {
+      // Close any open dropdown first
+      setOpenDropdownId(null);
+      setDropdownType(null);
+      setEditData(null);
+      setEditOriginal(null);
+      setEditErrors({});
+      setHistoryProject(null);
+      setProjectHistory([]);
+      
+      // Open new dropdown
+      setOpenDropdownId(item.project_id);
+      setDropdownType(type);
+      
+      if (type === 'edit') {
+        setEditData({ ...item });
+        setEditOriginal({ ...item });
+        setEditErrors({});
+      } else if (type === 'history') {
+        setHistoryProject(item);
+        setHistoryPage(1);
+        fetchHistoryData(item.project_id, 1);
+      }
+    }
+  };
+
+  // ── History handlers ─────────────────────────────────────────────
   const fetchHistoryData = async (projectId, page = 1) => {
     setHistoryLoading(true);
     try {
@@ -513,18 +527,6 @@ const WeeklyUpdate = () => {
     }
   };
 
-  const handleViewHistory = (item) => {
-    if (historyProject?.project_id === item.project_id) {
-      setHistoryProject(null);
-      setProjectHistory([]);
-      setHistoryTotal(0);
-      return;
-    }
-    setHistoryProject(item);
-    setHistoryPage(1);
-    fetchHistoryData(item.project_id, 1);
-  };
-
   const handleHistoryPageChange = (newPage) => {
     if (newPage >= 1 && historyProject) {
       setHistoryPage(newPage);
@@ -532,13 +534,6 @@ const WeeklyUpdate = () => {
     }
   };
 
-  const closeHistory = () => {
-    setHistoryProject(null);
-    setProjectHistory([]);
-    setHistoryTotal(0);
-  };
-
-  // ── Input helpers ─────────────────────────────────────────────────────────
   const getInputType = (field) => {
     if (FLOAT_FIELDS.includes(field) || INT_FIELDS.includes(field)) return "text";
     return "text";
@@ -682,188 +677,201 @@ const WeeklyUpdate = () => {
                 </tr>
               ) : (
                 filteredList.map((item) => (
-                  <tr key={item.project_id}>
-                    <td>{item.project_id}</td>
-                    <td>{item.project_name}</td>
-                    <td>{item.area_mapped_new ?? "—"}</td>
-                    <td>{item.farmer_no_new ?? "—"}</td>
-                    <td>{item.tree_no_new ?? "—"}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <button
-                          className="edit-btn"
-                          onClick={() => {
-                            setEditData({ ...item });
-                            setEditOriginal({ ...item });
-                            setEditErrors({});
-                            closeHistory();
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className={`history-btn${historyProject?.project_id === item.project_id ? " history-btn-active" : ""}`}
-                          onClick={() => {
-                            setEditData(null);
-                            setEditOriginal(null);
-                            setEditErrors({});
-                            handleViewHistory(item);
-                          }}
-                        >
-                          📜 History
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <React.Fragment key={item.project_id}>
+                    <tr>
+                      <td>{item.project_id}</td>
+                      <td>{item.project_name}</td>
+                      <td>{item.area_mapped_new ?? "—"}</td>
+                      <td>{item.farmer_no_new ?? "—"}</td>
+                      <td>{item.tree_no_new ?? "—"}</td>
+                      <td>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            className={`dropdown-btn ${openDropdownId === item.project_id && dropdownType === 'edit' ? 'active' : ''}`}
+                            onClick={() => toggleDropdown(item, 'edit')}
+                          >
+                            {openDropdownId === item.project_id && dropdownType === 'edit' ? '▲ Close Edit' : '▼ Edit'}
+                          </button>
+                          <button
+                            className={`dropdown-btn ${openDropdownId === item.project_id && dropdownType === 'history' ? 'active' : ''}`}
+                            onClick={() => toggleDropdown(item, 'history')}
+                          >
+                            {openDropdownId === item.project_id && dropdownType === 'history' ? '▲ Close History' : '▼ History'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* ── Dropdown Content (Edit Form) ────────────────────────── */}
+                    {openDropdownId === item.project_id && dropdownType === 'edit' && editData && (
+                      <tr className="dropdown-row">
+                        <td colSpan={6}>
+                          <div className="dropdown-content">
+                            <h4>✏️ Edit Project: {editData.project_id}</h4>
+                            <div className="form-grid">
+                              {Object.keys(emptyProject).map((field) => (
+                                <div key={field} className="field-wrap">
+                                  <label className="field-label">
+                                    {FIELD_LABELS[field]}
+                                    {field === "project_name" && <span className="required-star"> *</span>}
+                                    {field === "project_id" && <span className="disabled-tag"> — Not editable</span>}
+                                  </label>
+                                  <input
+                                    name={field}
+                                    type={getInputType(field)}
+                                    value={editData[field] ?? ""}
+                                    onChange={handleEditChange}
+                                    placeholder={field === "project_id" ? "Cannot be changed" : FIELD_PLACEHOLDERS[field]}
+                                    disabled={field === "project_id"}
+                                    className={
+                                      field === "project_id" ? "input-disabled"
+                                      : editErrors[field] ? "input-error"
+                                      : ""
+                                    }
+                                    required={field === "project_name"}
+                                    {...(field !== "project_id" ? getInputProps(field) : {})}
+                                  />
+                                  {editErrors[field] && (
+                                    <span className="error-msg">⚠ {editErrors[field]}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="action-row">
+                              <button
+                                className="delete-btn"
+                                onClick={() => {
+                                  setOpenDropdownId(null);
+                                  setDropdownType(null);
+                                  setEditData(null);
+                                  setEditOriginal(null);
+                                  setEditErrors({});
+                                }}
+                              >
+                                Cancel
+                              </button>
+
+                              <button
+                                className={`primary-btn ${!isDirty ? "btn-disabled" : ""}`}
+                                onClick={handleUpdate}
+                                disabled={loading || !isDirty}
+                                title={!isDirty ? "No changes made yet" : "Save your changes"}
+                              >
+                                {loading ? "Saving..." : "Save Changes"}
+                              </button>
+                            </div>
+
+                            {!isDirty && (
+                              <p className="no-change-hint">
+                                ℹ️ Edit any field above to enable Save Changes.
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* ── Dropdown Content (History Section) ────────────────────────── */}
+                    {openDropdownId === item.project_id && dropdownType === 'history' && historyProject && (
+                      <tr className="dropdown-row">
+                        <td colSpan={6}>
+                          <div className="dropdown-content">
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                              <h4>📜 History: {historyProject.project_id} — {historyProject.project_name}</h4>
+                              <button 
+                                className="delete-btn" 
+                                onClick={() => {
+                                  setOpenDropdownId(null);
+                                  setDropdownType(null);
+                                  setHistoryProject(null);
+                                  setProjectHistory([]);
+                                }}
+                              >
+                                ✕ Close
+                              </button>
+                            </div>
+
+                            {historyLoading ? (
+                              <div className="history-loading">Loading history...</div>
+                            ) : projectHistory.length === 0 ? (
+                              <div className="history-empty">No history records found for this project.</div>
+                            ) : (
+                              <>
+                                <div className="history-table-wrapper">
+                                  <table className="history-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Project Name</th>
+                                        <th>Area New</th>
+                                        <th>Area Existing</th>
+                                        <th>KML New</th>
+                                        <th>KML Existing</th>
+                                        <th>CRA New</th>
+                                        <th>CRA Existing</th>
+                                        <th>Farmer New</th>
+                                        <th>Farmer Existing</th>
+                                        <th>Tree New</th>
+                                        <th>Tree Existing</th>
+                                        <th>Updated By</th>
+                                        <th>Updated At</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {projectHistory.map((row, idx) => (
+                                        <tr key={idx}>
+                                          <td>{row.project_name}</td>
+                                          <td>{row.area_mapped_new ?? "—"}</td>
+                                          <td>{row.area_mapped_existing ?? "—"}</td>
+                                          <td>{row.kml_verified_new ?? "—"}</td>
+                                          <td>{row.kml_verified_existing ?? "—"}</td>
+                                          <td>{row.cra_data_new ?? "—"}</td>
+                                          <td>{row.cra_data_existing ?? "—"}</td>
+                                          <td>{row.farmer_no_new ?? "—"}</td>
+                                          <td>{row.farmer_no_existing ?? "—"}</td>
+                                          <td>{row.tree_no_new ?? "—"}</td>
+                                          <td>{row.tree_no_existing ?? "—"}</td>
+                                          <td>{row.username || `User ${row.updated_by}`}</td>
+                                          <td>{formatEpochToDateTime(row.updated_at)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {historyTotal > 200 && (
+                                  <div className="history-pagination">
+                                    <button
+                                      onClick={() => handleHistoryPageChange(historyPage - 1)}
+                                      disabled={historyPage === 1}
+                                      className="pagination-btn"
+                                    >
+                                      ← Previous
+                                    </button>
+                                    <span className="pagination-info">
+                                      Page {historyPage} of {Math.ceil(historyTotal / 200)}
+                                    </span>
+                                    <button
+                                      onClick={() => handleHistoryPageChange(historyPage + 1)}
+                                      disabled={historyPage >= Math.ceil(historyTotal / 200)}
+                                      className="pagination-btn"
+                                    >
+                                      Next →
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
           </table>
         </div>
-
-        {/* ── Edit Form (inline) ────────────────────────────────────────── */}
-        {editData && (
-          <div className="edit-card">
-            <h4>Editing: {editData.project_id}</h4>
-            <div className="form-grid">
-              {Object.keys(emptyProject).map((field) => (
-                <div key={field} className="field-wrap">
-                  <label className="field-label">
-                    {FIELD_LABELS[field]}
-                    {field === "project_name" && <span className="required-star"> *</span>}
-                    {field === "project_id" && <span className="disabled-tag"> — Not editable</span>}
-                  </label>
-                  <input
-                    name={field}
-                    type={getInputType(field)}
-                    value={editData[field] ?? ""}
-                    onChange={handleEditChange}
-                    placeholder={field === "project_id" ? "Cannot be changed" : FIELD_PLACEHOLDERS[field]}
-                    disabled={field === "project_id"}
-                    className={
-                      field === "project_id" ? "input-disabled"
-                      : editErrors[field] ? "input-error"
-                      : ""
-                    }
-                    required={field === "project_name"}
-                    {...(field !== "project_id" ? getInputProps(field) : {})}
-                  />
-                  {editErrors[field] && (
-                    <span className="error-msg">⚠ {editErrors[field]}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="action-row">
-              <button
-                className="delete-btn"
-                onClick={() => { setEditData(null); setEditOriginal(null); setEditErrors({}); }}
-              >
-                Cancel
-              </button>
-
-              <button
-                className={`primary-btn ${!isDirty ? "btn-disabled" : ""}`}
-                onClick={handleUpdate}
-                disabled={loading || !isDirty}
-                title={!isDirty ? "No changes made yet" : "Save your changes"}
-              >
-                {loading ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
-
-            {!isDirty && (
-              <p className="no-change-hint">
-                ℹ️ Edit any field above to enable Save Changes.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* ── History Section (inline, same style as edit-card) ────────── */}
-        {historyProject && (
-          <div className="edit-card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h4>📜 History: {historyProject.project_id} — {historyProject.project_name}</h4>
-              <button className="delete-btn" onClick={closeHistory}>
-                ✕ Close
-              </button>
-            </div>
-
-            {historyLoading ? (
-              <div className="history-loading">Loading history...</div>
-            ) : projectHistory.length === 0 ? (
-              <div className="history-empty">No history records found for this project.</div>
-            ) : (
-              <>
-                <div className="history-table-wrapper">
-                  <table className="history-table">
-                    <thead>
-                      <tr>
-                        <th>Project Name</th>
-                        <th>Area New</th>
-                        <th>Area Existing</th>
-                        <th>KML New</th>
-                        <th>KML Existing</th>
-                        <th>CRA New</th>
-                        <th>CRA Existing</th>
-                        <th>Farmer New</th>
-                        <th>Farmer Existing</th>
-                        <th>Tree New</th>
-                        <th>Tree Existing</th>
-                        <th>Updated By</th>
-                        <th>Updated At</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {projectHistory.map((row, idx) => (
-                        <tr key={idx}>
-                          <td>{row.project_name}</td>
-                          <td>{row.area_mapped_new ?? "—"}</td>
-                          <td>{row.area_mapped_existing ?? "—"}</td>
-                          <td>{row.kml_verified_new ?? "—"}</td>
-                          <td>{row.kml_verified_existing ?? "—"}</td>
-                          <td>{row.cra_data_new ?? "—"}</td>
-                          <td>{row.cra_data_existing ?? "—"}</td>
-                          <td>{row.farmer_no_new ?? "—"}</td>
-                          <td>{row.farmer_no_existing ?? "—"}</td>
-                          <td>{row.tree_no_new ?? "—"}</td>
-                          <td>{row.tree_no_existing ?? "—"}</td>
-                          <td>{row.username || `User ${row.updated_by}`}</td>
-                          <td>{formatEpochToDateTime(row.updated_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                {historyTotal > 200 && (
-                  <div className="history-pagination">
-                    <button
-                      onClick={() => handleHistoryPageChange(historyPage - 1)}
-                      disabled={historyPage === 1}
-                      className="pagination-btn"
-                    >
-                      ← Previous
-                    </button>
-                    <span className="pagination-info">
-                      Page {historyPage} of {Math.ceil(historyTotal / 200)}
-                    </span>
-                    <button
-                      onClick={() => handleHistoryPageChange(historyPage + 1)}
-                      disabled={historyPage >= Math.ceil(historyTotal / 200)}
-                      className="pagination-btn"
-                    >
-                      Next →
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

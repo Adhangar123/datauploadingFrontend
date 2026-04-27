@@ -434,20 +434,19 @@ const Visualization = () => {
                 {gps.map((g, i) => <option key={i} value={g}>{g}</option>)}
               </select>
             </div>
-              <div className="dash-header-right">
-          <div className="header-search">
-            <span className="search-icon">🔍</span>
-            <input
-              type="text"
-              placeholder="Search farmer, ID, village..."
-              value={searchQuery}
-              onChange={handleSearch}
-              className="header-search-input"
-            />
+             <div className="header-search">
+                <span className="search-icon">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search farmer, ID, village..."
+                  value={searchQuery}
+                  onChange={handleSearch}
+                  className="header-search-input"
+                />
           </div>
-          <button className="btn-refresh" onClick={loadData} title="Refresh Data">↺ Refresh</button>
-        </div>
-
+            <div className="dash-header-right">
+              <button className="btn-refresh" onClick={loadData} title="Refresh Data">↺ Refresh</button>
+            </div>
             <button className="btn-reset" onClick={resetFilters}>
               ↺ Reset All
             </button>
