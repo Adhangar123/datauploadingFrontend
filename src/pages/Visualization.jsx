@@ -1,4 +1,4 @@
-// Visualization.jsx — Farmer Dashboard (Updated)
+// Visualization.jsx — Farmer Dashboard (with CSV Preview Modal)
 
 import React, { useEffect, useState, useCallback } from "react";
 import CountUp from "react-countup";
@@ -22,6 +22,12 @@ const KPI_META = [
   { label: "Projects",       key: "projects", icon: "📂",  color: "#7c3aed" },
 ];
 
+const CSV_HEADERS = [
+  "Farmer ID", "Name", "State", "District", "Block",
+  "Gram Panchayat", "Village", "Project Code",
+  "Onboarding Date", "Updated At", "Updated By",
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const toChartData = (farmers, key) => {
@@ -33,7 +39,138 @@ const toChartData = (farmers, key) => {
 const formatTimestamp = (ts) => {
   if (!ts) return "—";
   const date = new Date(Number(ts) * 1000);
-  return isNaN(date) ? ts : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return isNaN(date) ? ts : date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+};
+
+const buildRows = (farmers) =>
+  farmers.map((f) => [
+    f.farmer_id ?? "",
+    f.farmer_name ?? "",
+    f.state ?? "",
+    f.district ?? "",
+    f.blocks ?? "",
+    f.grampanchayat ?? "",
+    f.village ?? "",
+    f.project_code ?? "",
+    f.onboarding_date ? formatTimestamp(f.onboarding_date) : "",
+    f.updated_at ? formatTimestamp(f.updated_at) : "",
+    f.username ?? "",
+  ]);
+
+// ─── CSV Download ─────────────────────────────────────────────────────────────
+
+const triggerDownload = (farmers, label = "farmers") => {
+  const rows = buildRows(farmers);
+  const csvContent = [CSV_HEADERS, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${label}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+// ─── CSV Preview Modal ────────────────────────────────────────────────────────
+
+const CsvPreviewModal = ({ farmers, label, onClose, onDownload }) => {
+  const rows = buildRows(farmers);
+  const previewRows = rows.slice(0, 20);
+
+  const handleBackdrop = (e) => {
+    if (e.target.classList.contains("modal-backdrop")) onClose();
+  };
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onClick={handleBackdrop}>
+      <div className="modal-box">
+
+        {/* Header */}
+        <div className="modal-header">
+          <div className="modal-header-left">
+            <span className="modal-icon">📄</span>
+            <div>
+              <h2 className="modal-title">CSV Preview</h2>
+              <p className="modal-subtitle">
+                {label}_{new Date().toISOString().slice(0, 10)}.csv
+              </p>
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Info Bar */}
+        <div className="modal-info-bar">
+          <span className="modal-info-item">📊 Total Rows: <strong>{farmers.length}</strong></span>
+          <span className="modal-info-item">📋 Columns: <strong>{CSV_HEADERS.length}</strong></span>
+          {farmers.length > 20 && (
+            <span className="modal-info-item preview-note">
+              👁️ Previewing first 20 of {farmers.length} rows
+            </span>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="modal-table-wrap">
+          <table className="modal-table">
+            <thead>
+              <tr>
+                <th className="row-num">#</th>
+                {CSV_HEADERS.map((h) => <th key={h}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {previewRows.map((row, i) => (
+                <tr key={i} className={i % 2 === 0 ? "row-even" : "row-odd"}>
+                  <td className="row-num">{i + 1}</td>
+                  {row.map((cell, j) => (
+                    <td key={j} title={String(cell)}>
+                      {cell || <span className="null-val">—</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="modal-footer">
+          <span className="modal-footer-note">
+            {farmers.length > 20
+              ? `⚠️ Preview shows 20 rows. All ${farmers.length} records will be in the downloaded file.`
+              : `✅ All ${farmers.length} records shown above will be downloaded.`}
+          </span>
+          <div className="modal-footer-btns">
+            <button className="btn-modal-cancel" onClick={onClose}>Cancel</button>
+            <button className="btn-modal-download" onClick={onDownload}>
+              ⬇ Download CSV ({farmers.length} records)
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
 };
 
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────
@@ -94,6 +231,16 @@ const Visualization = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const rowsPerPage = 10;
 
+  // ── Preview Modal State ───────────────────────────────────────────────────────
+  const [previewModal, setPreviewModal] = useState({ open: false, farmers: [], label: "" });
+
+  const openPreview  = (farmers, label) => setPreviewModal({ open: true, farmers, label });
+  const closePreview = () => setPreviewModal({ open: false, farmers: [], label: "" });
+  const handleDownloadFromModal = () => {
+    triggerDownload(previewModal.farmers, previewModal.label);
+    closePreview();
+  };
+
   // ── Generators ───────────────────────────────────────────────────────────────
 
   const generateStats = useCallback((farmers) => {
@@ -139,20 +286,6 @@ const Visualization = () => {
   }, [generateStats, generateDropdowns, generateCharts]);
 
   useEffect(() => { loadData(); }, [loadData]);
-  // show full time 
-    const formatTimestamp = (ts) => {
-      if (!ts) return "—";
-      const date = new Date(Number(ts) * 1000);
-      return isNaN(date) ? ts : date.toLocaleString("en-IN", { 
-        day: "2-digit", 
-        month: "short", 
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true 
-      });
-    };
 
   // ── Filters ───────────────────────────────────────────────────────────────────
 
@@ -238,13 +371,24 @@ const Visualization = () => {
 
   const totalPages    = Math.ceil(data.length / rowsPerPage);
   const paginatedData = data.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
+  // ── CSV Label ─────────────────────────────────────────────────────────────────
+
+  const getCsvLabel = () => {
+    const parts = ["farmers"];
+    if (filters.project)  parts.push(filters.project);
+    if (filters.state)    parts.push(filters.state);
+    if (filters.district) parts.push(filters.district);
+    if (filters.gp)       parts.push(filters.gp);
+    if (searchQuery)      parts.push("search");
+    return parts.join("_").replace(/\s+/g, "-").toLowerCase();
+  };
+
   // ── Render States ─────────────────────────────────────────────────────────────
 
   if (loading) return (
     <div className="vis-container loading-screen">
-      <div className="loader-ring">
-        <div /><div /><div /><div />
-      </div>
+      <div className="loader-ring"><div /><div /><div /><div /></div>
       <p className="loading-text">Loading farmer data...</p>
       <p className="loading-sub">Fetching records from database</p>
     </div>
@@ -264,6 +408,16 @@ const Visualization = () => {
   return (
     <div className="vis-container">
 
+      {/* ── CSV PREVIEW MODAL ──────────────────────────────────── */}
+      {previewModal.open && (
+        <CsvPreviewModal
+          farmers={previewModal.farmers}
+          label={previewModal.label}
+          onClose={closePreview}
+          onDownload={handleDownloadFromModal}
+        />
+      )}
+
       {/* ── TOP NAVBAR ─────────────────────────────────────────── */}
       <header className="dash-header">
         <div className="dash-header-left">
@@ -273,9 +427,9 @@ const Visualization = () => {
             <p className="dash-subtitle">Agricultural Data Management System</p>
           </div>
         </div>
-         <div className="dash-header-right">
-              <button className="btn-refresh" onClick={loadData} title="Refresh Data">↺ Refresh</button>
-            </div>
+        <div className="dash-header-right">
+          <button className="btn-refresh" onClick={loadData} title="Refresh Data">↺ Refresh</button>
+        </div>
       </header>
 
       <main className="dash-main">
@@ -289,9 +443,7 @@ const Visualization = () => {
                 <div className="kpi-icon-wrap">{icon}</div>
                 <div className="kpi-body">
                   <p className="kpi-label">{label}</p>
-                  <h2 className="kpi-value">
-                    <CountUp end={stats[key]} duration={2} separator="," />
-                  </h2>
+                  <h2 className="kpi-value"><CountUp end={stats[key]} duration={2} separator="," /></h2>
                 </div>
                 <div className="kpi-bar" style={{ background: color }} />
               </div>
@@ -304,8 +456,6 @@ const Visualization = () => {
           <SectionHeader icon="📈" title="Analytics" subtitle="Visual breakdown of farmer distribution" />
 
           <div className="charts-grid-2col">
-
-            {/* State Bar Chart */}
             <div className="chart-card">
               <div className="chart-card-header">
                 <h3>Farmers by State</h3>
@@ -318,15 +468,12 @@ const Visualization = () => {
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="value" fill="#16a34a" radius={[6, 6, 0, 0]}>
-                    {stateChart.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
+                    {stateChart.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Top Villages Bar Chart */}
             <div className="chart-card">
               <div className="chart-card-header">
                 <h3>Top 10 Villages</h3>
@@ -339,17 +486,13 @@ const Visualization = () => {
                   <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={80} />
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="value" fill="#2563eb" radius={[0, 6, 6, 0]}>
-                    {villageChart.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
+                    {villageChart.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-
           </div>
 
-          {/* District Pie + List */}
           <div className="chart-card district-card">
             <div className="chart-card-header">
               <h3>Farmers by District</h3>
@@ -360,9 +503,7 @@ const Visualization = () => {
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie data={districtChart} dataKey="value" nameKey="name" outerRadius={120} innerRadius={50} paddingAngle={2} label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}>
-                      {districtChart.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
+                      {districtChart.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <Tooltip formatter={(val) => [`${val} farmers`, "Count"]} />
                   </PieChart>
@@ -374,13 +515,7 @@ const Visualization = () => {
                     <span className="legend-dot" style={{ background: COLORS[i % COLORS.length] }} />
                     <span className="legend-name">{entry.name}</span>
                     <div className="legend-bar-wrap">
-                      <div
-                        className="legend-bar-fill"
-                        style={{
-                          width: `${(entry.value / Math.max(...districtChart.map(d => d.value))) * 100}%`,
-                          background: COLORS[i % COLORS.length],
-                        }}
-                      />
+                      <div className="legend-bar-fill" style={{ width: `${(entry.value / Math.max(...districtChart.map(d => d.value))) * 100}%`, background: COLORS[i % COLORS.length] }} />
                     </div>
                     <span className="legend-val">{entry.value}</span>
                   </div>
@@ -388,7 +523,6 @@ const Visualization = () => {
               </div>
             </div>
           </div>
-
         </section>
 
         {/* ── SECTION 3: FILTERS ────────────────────────────────── */}
@@ -437,38 +571,42 @@ const Visualization = () => {
                 {gps.map((g, i) => <option key={i} value={g}>{g}</option>)}
               </select>
             </div>
-             <div className="header-search">
-                <span className="search-icon">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Search farmer, ID, village..."
-                  value={searchQuery}
-                  onChange={handleSearch}
-                  className="header-search-input"
-                />
-          </div>
-            <button className="btn-reset" onClick={resetFilters}>
-              ↺ Reset All
-            </button>
 
+            <div className="header-search">
+              <span className="search-icon">🔍</span>
+              <input type="text" placeholder="Search farmer, ID, village..." value={searchQuery} onChange={handleSearch} className="header-search-input" />
+            </div>
+
+            <button className="btn-reset" onClick={resetFilters}>↺ Reset All</button>
           </div>
         </section>
 
         {/* ── SECTION 4: TABLE ──────────────────────────────────── */}
         <section className="dash-section">
-          <SectionHeader
-            icon="📋"
-            title="Farmer Records"
-            subtitle="View, search and edit farmer data"
-            badge={`${data.length} records`}
-          />
+          <SectionHeader icon="📋" title="Farmer Records" subtitle="View, search and edit farmer data" badge={`${data.length} records`} />
+
+          <div className="table-actions-bar">
+            <span className="table-result-info">
+              Showing <strong>{paginatedData.length}</strong> of <strong>{data.length}</strong> filtered records
+              {data.length !== allData.length && (
+                <span className="filter-active-badge"> (filtered from {allData.length} total)</span>
+              )}
+            </span>
+             <button
+            className="btn-download"
+            onClick={() => openPreview(data, getCsvLabel())}
+            title="Preview & Download CSV"
+          >
+            ⬇ Download CSV ({data.length})
+          </button>
+          </div>
 
           <div className="table-card">
             <div className="table-scroll">
               <table className="farmer-table">
                 <thead>
                   <tr>
-                    {["Farmer ID", "Name", "State", "District", "Block", "Gram Panchayat", "Village", "Project code", "Onboarding Date", "Updated At", "Updated By", "Action"]
+                    {["Farmer ID", "Name", "State", "District", "Block", "Gram Panchayat", "Village", "Project Code", "Onboarding Date", "Updated At", "Updated By", "Action"]
                       .map((h) => <th key={h}>{h}</th>)}
                   </tr>
                 </thead>
@@ -485,41 +623,29 @@ const Visualization = () => {
                   ) : (
                     paginatedData.map((f, i) => (
                       <tr key={i} className={editRow === f.farmer_id ? "editing-row" : ""}>
-
                         <td><span className="farmer-id">{f.farmer_id}</span></td>
-
                         {["farmer_name", "state", "district", "blocks", "grampanchayat", "village", "project_code"].map((field) => (
                           <td key={field}>
                             {editRow === f.farmer_id ? (
-                              <input
-                                name={field}
-                                value={editData[field] || ""}
-                                onChange={handleEditChange}
-                                className="edit-input"
-                              />
+                              <input name={field} value={editData[field] || ""} onChange={handleEditChange} className="edit-input" />
                             ) : (
                               f[field] ?? <span className="null-val">—</span>
                             )}
                           </td>
                         ))}
-
                         <td>{f.onboarding_date ? formatTimestamp(f.onboarding_date) : <span className="null-val">—</span>}</td>
                         <td>{f.updated_at ? formatTimestamp(f.updated_at) : <span className="null-val">—</span>}</td>
                         <td>{f.username ?? <span className="null-val">—</span>}</td>
-
                         <td>
                           {editRow === f.farmer_id ? (
                             <div className="action-btns">
-                              <button className="btn-save" onClick={() => handleUpdate(f.farmer_id)} disabled={saving}>
-                                {saving ? "..." : "✓ Save"}
-                              </button>
+                              <button className="btn-save" onClick={() => handleUpdate(f.farmer_id)} disabled={saving}>{saving ? "..." : "✓ Save"}</button>
                               <button className="btn-cancel" onClick={handleCancelEdit}>Cancel</button>
                             </div>
                           ) : (
                             <button className="btn-edit" onClick={() => handleEdit(f)}>Edit</button>
                           )}
                         </td>
-
                       </tr>
                     ))
                   )}
@@ -527,40 +653,30 @@ const Visualization = () => {
               </table>
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="pagination">
                 <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="pg-btn">«</button>
                 <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} className="pg-btn">‹ Prev</button>
-
                 <div className="pg-numbers">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     const start = Math.max(1, currentPage - 2);
                     const page  = start + i;
                     if (page > totalPages) return null;
                     return (
-                      <button
-                        key={page}
-                        className={`pg-num ${page === currentPage ? "active" : ""}`}
-                        onClick={() => setCurrentPage(page)}
-                      >{page}</button>
+                      <button key={page} className={`pg-num ${page === currentPage ? "active" : ""}`} onClick={() => setCurrentPage(page)}>{page}</button>
                     );
                   })}
                 </div>
-
                 <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="pg-btn">Next ›</button>
                 <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="pg-btn">»</button>
-
                 <span className="pg-info">Page {currentPage} of {totalPages}</span>
               </div>
             )}
-
           </div>
         </section>
 
       </main>
 
-      {/* ── FOOTER ────────────────────────────────────────────── */}
       <footer className="dash-footer">
         <span>🌾 Farmer Dashboard &copy; {new Date().getFullYear()}</span>
         <span>Total Records: {allData.length}</span>
