@@ -53,13 +53,14 @@ const Dashboard = () => {
             <h2>Land Parcel Data</h2>
             <p>Upload land parcel boundaries, KML/GeoJSON files, and metadata.</p>
           </div>
-          <div
+           <div
             className="dashboard-card cra" 
-            onClick={() => handleCardClick("/DocumentUploading")}
           >
             <div className="card-icon">📊</div>
-            <h2>CRA Data</h2>
-            <p>Upload CRA datasets, KML/GeoJSON files, and metadata.</p>
+            <h2>Farmer Documents Data</h2>
+            <p>
+            upload verify Documents  Aadhaar cards, land ownership records, agreements.
+            </p>
           </div>
            <div
             className="dashboard-card cra"
