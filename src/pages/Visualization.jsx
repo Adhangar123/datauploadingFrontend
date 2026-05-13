@@ -366,6 +366,17 @@ const Visualization = () => {
     if (searchQuery)      parts.push("search");
     return parts.join("_").replace(/\s+/g, "-").toLowerCase();
   };
+  const projectNames = {
+  "FCF050": "African Bamboo",
+  "FCF053": "Biwal",
+  "FCF052": "Green Intelligence",
+  "FCF48": "Shristi",
+  "FCF048": "Shristi Dhenkenal",
+  "FCF011": "Rangsang",
+  "FCF049": "Gram Vikas",
+  "FCF057": "SOOVA",
+  "FCF047": "Prasari",
+};
 
   // ── Render States ─────────────────────────────────────────────────────────────
 
@@ -544,11 +555,23 @@ const Visualization = () => {
           <section className="dash-section">
             <SectionHeader icon="🔽" title="Filters" subtitle="Narrow down records by category" />
             <div className="filter-panel">
-              <div className="filter-group">
+             <div className="filter-group">
                 <label className="filter-label">PROJECT</label>
-                <select name="project" value={filters.project} onChange={handleFilter} className="filter-select">
+                
+                <select
+                  name="project"
+                  value={filters.project}
+                  onChange={handleFilter}
+                  className="filter-select"
+                >
                   <option value="">All Projects</option>
-                  {projects.map((p, i) => <option key={i} value={p}>{p}</option>)}
+
+                  {projects.map((p, i) => (
+                    <option key={i} value={p}>
+                      {p} - {projectNames[p] || "Unknown Project"}
+                    </option>
+                  ))}
+                  
                 </select>
               </div>
               <div className="filter-group">
