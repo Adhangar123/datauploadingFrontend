@@ -1,6 +1,5 @@
 import React, { useState, useRef } from "react";
-import Papa from "papaparse";
-import axios from "axios";
+import { uploadFarmerDocsZip } from "../api/farmerDocsApi";
 import "../style/KmlTodatabase.css";
 
 const REQUIRED_HEADERS = [
@@ -10,209 +9,233 @@ const REQUIRED_HEADERS = [
   "farmer_photo",
 ];
 
+const ZIP_DOC_TYPE_MAP = {
+  aadhar: "aadhar",
+  agreement: "agreement_letter",
+  agreement_letter: "agreement_letter",
+  photo: "farmer_photo",
+  farmer_photo: "farmer_photo",
+};
+
+const VALID_DOC_FOLDERS = Object.keys(ZIP_DOC_TYPE_MAP);
+
 const DocumentUploading = () => {
-  const [file, setFile] = useState(null);
-  const [columns, setColumns] = useState([]);
+  const [zipFile, setZipFile] = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
   const [incorrectRows, setIncorrectRows] = useState([]);
   const [message, setMessage] = useState("");
   const [dbError, setDbError] = useState("");
   const [uploading, setUploading] = useState(false);
-
-  // 👉 ALL FILES (folder se)
-  const [allFiles, setAllFiles] = useState([]);
+  const [previewing, setPreviewing] = useState(false);
+  const [uploadSummary, setUploadSummary] = useState(null);
 
   const fileInputRef = useRef();
 
-  // 📂 CSV + Folder Upload (SINGLE INPUT)
-  const handleFolderUpload = (e) => {
-    const files = Array.from(e.target.files);
+  const handleZipSelect = (e) => {
+    const file = e.target.files?.[0];
 
-    const csvFile = files.find((f) => f.name.endsWith(".csv"));
+    if (!file) return;
 
-    if (!csvFile) {
-      alert("❌ CSV file not found in selected folder");
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      alert("Please select a .zip file");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    setFile(csvFile);
-
-    // CSV ke alawa sab files store karo
-    setAllFiles(files.filter((f) => !f.name.endsWith(".csv")));
+    setZipFile(file);
+    setCorrectedRows([]);
+    setIncorrectRows([]);
+    setMessage("");
+    setDbError("");
+    setUploadSummary(null);
   };
 
-  // 🧠 Sanitize
-  const sanitizeRow = (row) => ({
-    farmer_id: String(row.farmer_id || "").trim(),
-    aadhar: row.aadhar?.trim(),
-    agreement_letter: row.agreement_letter?.trim(),
-    farmer_photo: row.farmer_photo?.trim(),
-  });
+  const handleReadFile = async () => {
+    if (!zipFile) return;
 
-  // 🧠 Validate
-  const validateRow = (row, existingIds) => {
-    let errors = [];
+    setPreviewing(true);
+    setMessage("");
+    setDbError("");
+    setUploadSummary(null);
 
-    if (!row.farmer_id) errors.push("farmer_id missing");
-    if (!row.aadhar) errors.push("aadhar missing");
-    if (!row.agreement_letter) errors.push("agreement missing");
-    if (!row.farmer_photo) errors.push("photo missing");
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(zipFile);
+      const farmerMap = {};
 
-    if (existingIds.includes(row.farmer_id)) {
-      errors.push("Duplicate farmer_id");
+      for (const [relPath, entry] of Object.entries(zip.files)) {
+        if (entry.dir) continue;
+
+        const parts = relPath
+          .replace(/\\/g, "/")
+          .replace(/^\//, "")
+          .split("/")
+          .filter(Boolean);
+
+        const docTypeIndex = parts.findIndex((part) =>
+          VALID_DOC_FOLDERS.includes(part.toLowerCase())
+        );
+
+        if (docTypeIndex === -1) continue;
+
+        const rawDocType = parts[docTypeIndex].toLowerCase();
+        const mappedDocType = ZIP_DOC_TYPE_MAP[rawDocType];
+        const farmerId = parts[docTypeIndex + 1];
+        const fileName = parts[parts.length - 1];
+
+        if (!mappedDocType || !farmerId || !fileName) continue;
+
+        if (!farmerMap[farmerId]) {
+          farmerMap[farmerId] = { farmer_id: farmerId };
+        }
+
+        farmerMap[farmerId][mappedDocType] = fileName;
+      }
+
+      const valid = [];
+      const invalid = [];
+      const seenIds = new Set();
+
+      for (const row of Object.values(farmerMap)) {
+        const errors = [];
+
+        if (!row.farmer_id) errors.push("farmer_id missing");
+        if (!row.aadhar) errors.push("aadhar missing");
+        if (!row.agreement_letter) errors.push("agreement_letter missing");
+        if (!row.farmer_photo) errors.push("farmer_photo missing");
+
+        if (row.farmer_id && seenIds.has(row.farmer_id)) {
+          errors.push("Duplicate farmer_id");
+        }
+
+        if (errors.length === 0) {
+          valid.push(row);
+          seenIds.add(row.farmer_id);
+        } else {
+          invalid.push({ ...row, __errors: errors });
+        }
+      }
+
+      if (valid.length === 0 && invalid.length === 0) {
+        setDbError(
+          "No valid files found. Expected: aadhar/<farmer_id>/<file>, agreement_letter/<farmer_id>/<file>, farmer_photo/<farmer_id>/<file>"
+        );
+      }
+
+      setCorrectedRows(valid);
+      setIncorrectRows(invalid);
+    } catch (err) {
+      setDbError(`Could not read ZIP: ${err.message}`);
+    } finally {
+      setPreviewing(false);
     }
-
-    return { isValid: errors.length === 0, errors };
   };
 
-  // 📊 Read CSV
-  const handleReadFile = () => {
-    if (!file) return;
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const data = results.data;
-
-        if (!data.length) return;
-
-        setColumns(Object.keys(data[0]));
-
-        let valid = [];
-        let invalid = [];
-
-        data.forEach((row) => {
-          const clean = sanitizeRow(row);
-
-          const check = validateRow(
-            clean,
-            valid.map((r) => r.farmer_id)
-          );
-
-          if (check.isValid) {
-            valid.push(clean);
-          } else {
-            invalid.push({ ...clean, __errors: check.errors });
-          }
-        });
-
-        setCorrectedRows(valid);
-        setIncorrectRows(invalid);
-      },
-    });
-  };
-
-  // 🚀 SEND TO DB
   const handleSendToDB = async () => {
+    if (!zipFile || correctedRows.length === 0) return;
+
     try {
       setUploading(true);
       setMessage("");
       setDbError("");
+      setUploadSummary(null);
 
-      const formData = new FormData();
+      const data = await uploadFarmerDocsZip(zipFile);
 
-      correctedRows.forEach((row, index) => {
-        formData.append(`records[${index}][farmer_id]`, row.farmer_id);
-
-        // ✅ Exact match from folder files
-        const aadharFile = allFiles.find((f) => f.name === row.aadhar);
-        const agreementFile = allFiles.find(
-          (f) => f.name === row.agreement_letter
-        );
-        const photoFile = allFiles.find(
-          (f) => f.name === row.farmer_photo
-        );
-
-        if (!aadharFile || !agreementFile || !photoFile) {
-          throw new Error(
-            `Missing file for farmer_id ${row.farmer_id}`
-          );
-        }
-
-        formData.append(`records[${index}][aadhar]`, aadharFile);
-        formData.append(
-          `records[${index}][agreement_letter]`,
-          agreementFile
-        );
-        formData.append(
-          `records[${index}][farmer_photo]`,
-          photoFile
-        );
-      });
-
-      const token = localStorage.getItem("token");
-
-      await axios.post(
-        "http://localhost:5000/api/upload-documents",
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      setMessage("✅ Upload successful 🚀");
+      setMessage(data.message || "ZIP uploaded successfully");
+      setUploadSummary(data);
     } catch (err) {
       console.error(err);
-      setDbError(err.message || "❌ Upload failed");
+      setDbError(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          err.message ||
+          "Upload failed"
+      );
     } finally {
       setUploading(false);
     }
   };
 
   const handleReset = () => {
-    setFile(null);
-    setColumns([]);
+    setZipFile(null);
     setCorrectedRows([]);
     setIncorrectRows([]);
-    setAllFiles([]);
-    fileInputRef.current.value = "";
+    setMessage("");
+    setDbError("");
+    setUploadSummary(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleApprove = (index) => {
+    const row = incorrectRows[index];
+    const errors = [];
+
+    if (!row.farmer_id) errors.push("farmer_id missing");
+    if (!row.aadhar) errors.push("aadhar missing");
+    if (!row.agreement_letter) errors.push("agreement_letter missing");
+    if (!row.farmer_photo) errors.push("farmer_photo missing");
+
+    if (correctedRows.some((item) => item.farmer_id === row.farmer_id)) {
+      errors.push("Duplicate farmer_id");
+    }
+
+    if (errors.length > 0) {
+      alert(errors.join("\n"));
+      return;
+    }
+
+    const { __errors, ...cleanRow } = row;
+
+    setCorrectedRows([...correctedRows, cleanRow]);
+    setIncorrectRows(incorrectRows.filter((_, i) => i !== index));
   };
 
   return (
     <div className="kml-upload-container">
-      <h2>Document Upload</h2>
+      <h2>Document Upload (.zip file only)</h2>
 
-      {/* ✅ SINGLE INPUT (CSV + FOLDER) */}
       <input
         type="file"
-        webkitdirectory="true"
-        multiple
-        onChange={handleFolderUpload}
+        accept=".zip"
+        onChange={handleZipSelect}
         ref={fileInputRef}
       />
 
-      <button onClick={handleReadFile} disabled={!file}>
-        1️⃣ Read & Validate
+      {zipFile && (
+        <span style={{ fontSize: 13, color: "#475569", marginLeft: 8 }}>
+          {zipFile.name} ({(zipFile.size / 1024 / 1024).toFixed(2)} MB)
+        </span>
+      )}
+
+      <button onClick={handleReadFile} disabled={!zipFile || previewing}>
+        {previewing ? "Reading..." : "1. Read & Validate"}
       </button>
 
-      <button onClick={handleReset}>🔄 Reset</button>
+      <button onClick={handleReset}>Reset</button>
 
       <div className="stack-container">
-
-        {/* ✅ VALID */}
         <div className="box green">
-          <h3>✅ Valid Data</h3>
+          <h3>Valid Data ({correctedRows.length})</h3>
 
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  {columns.map((c) => (
-                    <th key={c}>
-                      {REQUIRED_HEADERS.includes(c) ? `${c} *` : c}
-                    </th>
+                  {REQUIRED_HEADERS.map((column) => (
+                    <th key={column}>{column} *</th>
                   ))}
                 </tr>
               </thead>
+
               <tbody>
-                {correctedRows.map((row, i) => (
-                  <tr key={i}>
-                    {columns.map((c) => (
-                      <td key={c}>{row[c]}</td>
+                {correctedRows.map((row, index) => (
+                  <tr key={`${row.farmer_id}-${index}`}>
+                    {REQUIRED_HEADERS.map((column) => (
+                      <td key={column}>{row[column]}</td>
                     ))}
                   </tr>
                 ))}
@@ -223,68 +246,64 @@ const DocumentUploading = () => {
           <button
             className="send-db-btn"
             onClick={handleSendToDB}
-            disabled={uploading}
+            disabled={uploading || correctedRows.length === 0}
           >
-            {uploading ? "Uploading..." : "2️⃣ Send to Database"}
+            {uploading ? "Uploading..." : "2. Send to Database"}
           </button>
 
-          <p>{message}</p>
+          {message && <p style={{ color: "green" }}>{message}</p>}
           {dbError && <p style={{ color: "red" }}>{dbError}</p>}
+
+          {uploadSummary && (
+            <div style={{ marginTop: 10, fontSize: 14 }}>
+              <p>Storage Mode: {uploadSummary.storage_mode}</p>
+              <p>Total: {uploadSummary.total}</p>
+              <p>Succeeded: {uploadSummary.succeeded}</p>
+              <p>Failed: {uploadSummary.failed}</p>
+            </div>
+          )}
         </div>
 
-        {/* ❌ INVALID */}
         <div className="box red">
-          <h3>❌ Incorrect Data</h3>
+          <h3>Incorrect Data ({incorrectRows.length})</h3>
 
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  {columns.map((c) => (
-                    <th key={c}>{c}</th>
+                  {REQUIRED_HEADERS.map((column) => (
+                    <th key={column}>{column}</th>
                   ))}
                   <th>Reason</th>
                   <th>Action</th>
                 </tr>
               </thead>
+
               <tbody>
-                {incorrectRows.map((row, i) => (
-                  <tr key={i}>
-                    {columns.map((c) => (
-                      <td key={c}>
+                {incorrectRows.map((row, index) => (
+                  <tr key={`${row.farmer_id || "invalid"}-${index}`}>
+                    {REQUIRED_HEADERS.map((column) => (
+                      <td key={column}>
                         <input
-                          value={row[c] ?? ""}
+                          value={row[column] ?? ""}
                           onChange={(e) => {
                             const updated = [...incorrectRows];
-                            updated[i][c] = e.target.value;
+                            updated[index] = {
+                              ...updated[index],
+                              [column]: e.target.value,
+                            };
                             setIncorrectRows(updated);
                           }}
                         />
                       </td>
                     ))}
+
                     <td style={{ color: "red" }}>
                       {row.__errors?.join(", ")}
                     </td>
+
                     <td>
-                      <button
-                        onClick={() => {
-                          const cleaned = sanitizeRow(row);
-                          const check = validateRow(
-                            cleaned,
-                            correctedRows.map((r) => r.farmer_id)
-                          );
-
-                          if (!check.isValid) {
-                            alert(check.errors.join("\n"));
-                            return;
-                          }
-
-                          setCorrectedRows([...correctedRows, cleaned]);
-                          setIncorrectRows(
-                            incorrectRows.filter((_, idx) => idx !== i)
-                          );
-                        }}
-                      >
+                      <button onClick={() => handleApprove(index)}>
                         Approve
                       </button>
                     </td>
@@ -294,7 +313,6 @@ const DocumentUploading = () => {
             </table>
           </div>
         </div>
-
       </div>
     </div>
   );

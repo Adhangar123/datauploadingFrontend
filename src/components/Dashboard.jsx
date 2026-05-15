@@ -55,6 +55,7 @@ const Dashboard = () => {
           </div>
            <div
             className="dashboard-card cra" 
+           onClick={() => handleCardClick("/DocumentUploading")}
           >
             <div className="card-icon">📊</div>
             <h2>Farmer Documents Data</h2>

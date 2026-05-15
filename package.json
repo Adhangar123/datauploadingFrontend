@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@tmcw/togeojson": "^7.1.2",
+    "adm-zip": "^0.5.17",
     "axios": "^1.13.6",
     "framer-motion": "^12.29.2",
+    "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "papaparse": "^5.5.3",
     "react": "^19.2.0",

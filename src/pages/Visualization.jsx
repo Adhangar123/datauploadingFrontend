@@ -514,7 +514,7 @@ const Visualization = () => {
                 <h3>Farmers by District</h3>
                 <span className="chart-count">{districtChart.length} districts</span>
               </div>
-              <div className="district-layout">
+              <div className="district-layout">-
                 <div className="district-pie">
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
