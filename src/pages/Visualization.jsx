@@ -514,21 +514,28 @@ const Visualization = () => {
                 <h3>Farmers by District</h3>
                 <span className="chart-count">{districtChart.length} districts</span>
               </div>
-              <div className="district-layout">-
+               <div className="district-layout">
                 <div className="district-pie">
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
-                        data={districtChart} dataKey="value" nameKey="name"
-                        outerRadius={120} innerRadius={50} paddingAngle={2}
-                        label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                        data={districtChart}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={120}
+                        innerRadius={50}
+                        paddingAngle={2}
+                        label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                       >
-                        {districtChart.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        {districtChart.map((_, i) => (
+                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        ))}
                       </Pie>
                       <Tooltip formatter={(val) => [`${val} farmers`, "Count"]} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+
                 <div className="district-list">
                   {districtChart.map((entry, i) => (
                     <div key={i} className="legend-row">
@@ -539,7 +546,7 @@ const Visualization = () => {
                           className="legend-bar-fill"
                           style={{
                             width: `${(entry.value / Math.max(...districtChart.map(d => d.value))) * 100}%`,
-                            background: COLORS[i % COLORS.length]
+                            background: COLORS[i % COLORS.length],
                           }}
                         />
                       </div>
@@ -547,7 +554,8 @@ const Visualization = () => {
                     </div>
                   ))}
                 </div>
-              </div>
+                </div>
+
             </div>
           </section>
 
