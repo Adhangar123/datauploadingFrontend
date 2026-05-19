@@ -231,25 +231,6 @@ const DocumentUploading = () => {
 
       <button onClick={handleReset}>Reset</button>
 
-      {/* ✅ ZIP root folder preview — user ko pata chale kaunsa GCS folder banega */}
-      {zipRootFolder && (
-        <div
-          style={{
-            marginTop: 10,
-            padding: "8px 14px",
-            background: "#f0fdf4",
-            border: "1px solid #86efac",
-            borderRadius: 6,
-            fontSize: 13,
-            color: "#166534",
-            display: "inline-block",
-          }}
-        >
-          📁 GCS Folder:{" "}
-          <strong>{zipRootFolder}</strong> — files isi folder ke andar save honge
-        </div>
-      )}
-
       <div className="stack-container">
         <div className="box green">
           <h3>Valid Data ({correctedRows.length})</h3>
