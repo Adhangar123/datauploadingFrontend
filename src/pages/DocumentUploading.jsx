@@ -4,7 +4,6 @@ import "../style/KmlTodatabase.css";
 
 // farmer_photo is optional — not included in required headers
 const REQUIRED_HEADERS = ["farmer_id", "aadhar", "agreement_letter"];
-const ALL_HEADERS = ["farmer_id", "aadhar", "agreement_letter", "farmer_photo"];
 
 const ZIP_DOC_TYPE_MAP = {
   aadhar: "aadhar",
@@ -20,6 +19,7 @@ const DocumentUploading = () => {
   const [zipFile, setZipFile] = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
   const [incorrectRows, setIncorrectRows] = useState([]);
+  const [zipRootFolder, setZipRootFolder] = useState(null); // ✅ ZIP root folder track karo
   const [message, setMessage] = useState("");
   const [dbError, setDbError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -42,6 +42,7 @@ const DocumentUploading = () => {
     setZipFile(file);
     setCorrectedRows([]);
     setIncorrectRows([]);
+    setZipRootFolder(null);
     setMessage("");
     setDbError("");
     setUploadSummary(null);
@@ -54,11 +55,13 @@ const DocumentUploading = () => {
     setMessage("");
     setDbError("");
     setUploadSummary(null);
+    setZipRootFolder(null);
 
     try {
       const JSZip = (await import("jszip")).default;
       const zip = await JSZip.loadAsync(zipFile);
       const farmerMap = {};
+      let detectedRootFolder = null; // ✅ ZIP root folder detect karo
 
       for (const [relPath, entry] of Object.entries(zip.files)) {
         if (entry.dir) continue;
@@ -68,6 +71,12 @@ const DocumentUploading = () => {
           .replace(/^\//, "")
           .split("/")
           .filter(Boolean);
+
+        // Minimum: <root>/<docType>/<farmerId>/<file> = 4 parts
+        if (parts.length < 4) continue;
+
+        // ✅ Pehla part ZIP root folder hai (e.g. "Prasari")
+        const rootFolder = parts[0];
 
         const docTypeIndex = parts.findIndex((part) =>
           VALID_DOC_FOLDERS.includes(part.toLowerCase())
@@ -82,12 +91,20 @@ const DocumentUploading = () => {
 
         if (!mappedDocType || !farmerId || !fileName) continue;
 
+        // ✅ Root folder pehli valid entry se set karo
+        if (!detectedRootFolder) {
+          detectedRootFolder = rootFolder;
+        }
+
         if (!farmerMap[farmerId]) {
           farmerMap[farmerId] = { farmer_id: farmerId };
         }
 
         farmerMap[farmerId][mappedDocType] = fileName;
       }
+
+      // ✅ Detected root folder state mein save karo
+      setZipRootFolder(detectedRootFolder);
 
       const valid = [];
       const invalid = [];
@@ -96,7 +113,6 @@ const DocumentUploading = () => {
       for (const row of Object.values(farmerMap)) {
         const errors = [];
 
-        // Required fields only
         if (!row.farmer_id) errors.push("farmer_id missing");
         if (!row.aadhar) errors.push("aadhar missing");
         if (!row.agreement_letter) errors.push("agreement_letter missing");
@@ -116,7 +132,7 @@ const DocumentUploading = () => {
 
       if (valid.length === 0 && invalid.length === 0) {
         setDbError(
-          "No valid files found. Expected: aadhar/<farmer_id>/<file>, agreement_letter/<farmer_id>/<file>, farmer_photo/<farmer_id>/<file> (optional)"
+          "No valid files found. Expected ZIP structure: <FolderName>/aadhar/<farmer_id>/<file>, <FolderName>/agreement_letter/<farmer_id>/<file>, <FolderName>/farmer_photo/<farmer_id>/<file> (optional)"
         );
       }
 
@@ -159,6 +175,7 @@ const DocumentUploading = () => {
     setZipFile(null);
     setCorrectedRows([]);
     setIncorrectRows([]);
+    setZipRootFolder(null);
     setMessage("");
     setDbError("");
     setUploadSummary(null);
@@ -172,11 +189,9 @@ const DocumentUploading = () => {
     const row = incorrectRows[index];
     const errors = [];
 
-    // Only validate required fields
     if (!row.farmer_id) errors.push("farmer_id missing");
     if (!row.aadhar) errors.push("aadhar missing");
     if (!row.agreement_letter) errors.push("agreement_letter missing");
-    // farmer_photo is optional — skip validation
 
     if (correctedRows.some((item) => item.farmer_id === row.farmer_id)) {
       errors.push("Duplicate farmer_id");
@@ -216,6 +231,25 @@ const DocumentUploading = () => {
 
       <button onClick={handleReset}>Reset</button>
 
+      {/* ✅ ZIP root folder preview — user ko pata chale kaunsa GCS folder banega */}
+      {zipRootFolder && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: "8px 14px",
+            background: "#f0fdf4",
+            border: "1px solid #86efac",
+            borderRadius: 6,
+            fontSize: 13,
+            color: "#166534",
+            display: "inline-block",
+          }}
+        >
+          📁 GCS Folder:{" "}
+          <strong>{zipRootFolder}</strong> — files isi folder ke andar save honge
+        </div>
+      )}
+
       <div className="stack-container">
         <div className="box green">
           <h3>Valid Data ({correctedRows.length})</h3>
@@ -227,7 +261,6 @@ const DocumentUploading = () => {
                   {REQUIRED_HEADERS.map((col) => (
                     <th key={col}>{col} *</th>
                   ))}
-                  {/* farmer_photo shown but marked optional */}
                   <th>farmer_photo (optional)</th>
                 </tr>
               </thead>
@@ -256,8 +289,15 @@ const DocumentUploading = () => {
           {message && <p style={{ color: "green" }}>{message}</p>}
           {dbError && <p style={{ color: "red" }}>{dbError}</p>}
 
+          {/* ✅ Upload summary mein zip_folder bhi dikhao */}
           {uploadSummary && (
             <div style={{ marginTop: 10, fontSize: 14 }}>
+              {uploadSummary.zip_folder && (
+                <p>
+                  📁 Saved in GCS folder:{" "}
+                  <strong>{uploadSummary.zip_folder}</strong>
+                </p>
+              )}
               <p>Total: {uploadSummary.total}</p>
               <p>Succeeded: {uploadSummary.succeeded}</p>
               <p>Failed: {uploadSummary.failed}</p>
@@ -300,7 +340,6 @@ const DocumentUploading = () => {
                       </td>
                     ))}
 
-                    {/* farmer_photo editable but not required */}
                     <td>
                       <input
                         value={row.farmer_photo ?? ""}
