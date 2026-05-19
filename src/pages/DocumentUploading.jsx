@@ -292,12 +292,6 @@ const DocumentUploading = () => {
           {/* ✅ Upload summary mein zip_folder bhi dikhao */}
           {uploadSummary && (
             <div style={{ marginTop: 10, fontSize: 14 }}>
-              {uploadSummary.zip_folder && (
-                <p>
-                  📁 Saved in GCS folder:{" "}
-                  <strong>{uploadSummary.zip_folder}</strong>
-                </p>
-              )}
               <p>Total: {uploadSummary.total}</p>
               <p>Succeeded: {uploadSummary.succeeded}</p>
               <p>Failed: {uploadSummary.failed}</p>
