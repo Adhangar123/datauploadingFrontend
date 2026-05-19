@@ -2,12 +2,9 @@ import React, { useState, useRef } from "react";
 import { uploadFarmerDocsZip } from "../api/farmerDocsApi";
 import "../style/KmlTodatabase.css";
 
-const REQUIRED_HEADERS = [
-  "farmer_id",
-  "aadhar",
-  "agreement_letter",
-  "farmer_photo",
-];
+// farmer_photo is optional — not included in required headers
+const REQUIRED_HEADERS = ["farmer_id", "aadhar", "agreement_letter"];
+const ALL_HEADERS = ["farmer_id", "aadhar", "agreement_letter", "farmer_photo"];
 
 const ZIP_DOC_TYPE_MAP = {
   aadhar: "aadhar",
@@ -99,10 +96,11 @@ const DocumentUploading = () => {
       for (const row of Object.values(farmerMap)) {
         const errors = [];
 
+        // Required fields only
         if (!row.farmer_id) errors.push("farmer_id missing");
         if (!row.aadhar) errors.push("aadhar missing");
         if (!row.agreement_letter) errors.push("agreement_letter missing");
-        if (!row.farmer_photo) errors.push("farmer_photo missing");
+        // farmer_photo is optional — no error if missing
 
         if (row.farmer_id && seenIds.has(row.farmer_id)) {
           errors.push("Duplicate farmer_id");
@@ -118,7 +116,7 @@ const DocumentUploading = () => {
 
       if (valid.length === 0 && invalid.length === 0) {
         setDbError(
-          "No valid files found. Expected: aadhar/<farmer_id>/<file>, agreement_letter/<farmer_id>/<file>, farmer_photo/<farmer_id>/<file>"
+          "No valid files found. Expected: aadhar/<farmer_id>/<file>, agreement_letter/<farmer_id>/<file>, farmer_photo/<farmer_id>/<file> (optional)"
         );
       }
 
@@ -174,10 +172,11 @@ const DocumentUploading = () => {
     const row = incorrectRows[index];
     const errors = [];
 
+    // Only validate required fields
     if (!row.farmer_id) errors.push("farmer_id missing");
     if (!row.aadhar) errors.push("aadhar missing");
     if (!row.agreement_letter) errors.push("agreement_letter missing");
-    if (!row.farmer_photo) errors.push("farmer_photo missing");
+    // farmer_photo is optional — skip validation
 
     if (correctedRows.some((item) => item.farmer_id === row.farmer_id)) {
       errors.push("Duplicate farmer_id");
@@ -225,18 +224,21 @@ const DocumentUploading = () => {
             <table>
               <thead>
                 <tr>
-                  {REQUIRED_HEADERS.map((column) => (
-                    <th key={column}>{column} *</th>
+                  {REQUIRED_HEADERS.map((col) => (
+                    <th key={col}>{col} *</th>
                   ))}
+                  {/* farmer_photo shown but marked optional */}
+                  <th>farmer_photo (optional)</th>
                 </tr>
               </thead>
 
               <tbody>
                 {correctedRows.map((row, index) => (
                   <tr key={`${row.farmer_id}-${index}`}>
-                    {REQUIRED_HEADERS.map((column) => (
-                      <td key={column}>{row[column]}</td>
+                    {REQUIRED_HEADERS.map((col) => (
+                      <td key={col}>{row[col]}</td>
                     ))}
+                    <td>{row.farmer_photo ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -256,7 +258,6 @@ const DocumentUploading = () => {
 
           {uploadSummary && (
             <div style={{ marginTop: 10, fontSize: 14 }}>
-              <p>Storage Mode: {uploadSummary.storage_mode}</p>
               <p>Total: {uploadSummary.total}</p>
               <p>Succeeded: {uploadSummary.succeeded}</p>
               <p>Failed: {uploadSummary.failed}</p>
@@ -271,9 +272,10 @@ const DocumentUploading = () => {
             <table>
               <thead>
                 <tr>
-                  {REQUIRED_HEADERS.map((column) => (
-                    <th key={column}>{column}</th>
+                  {REQUIRED_HEADERS.map((col) => (
+                    <th key={col}>{col} *</th>
                   ))}
+                  <th>farmer_photo (optional)</th>
                   <th>Reason</th>
                   <th>Action</th>
                 </tr>
@@ -282,21 +284,37 @@ const DocumentUploading = () => {
               <tbody>
                 {incorrectRows.map((row, index) => (
                   <tr key={`${row.farmer_id || "invalid"}-${index}`}>
-                    {REQUIRED_HEADERS.map((column) => (
-                      <td key={column}>
+                    {REQUIRED_HEADERS.map((col) => (
+                      <td key={col}>
                         <input
-                          value={row[column] ?? ""}
+                          value={row[col] ?? ""}
                           onChange={(e) => {
                             const updated = [...incorrectRows];
                             updated[index] = {
                               ...updated[index],
-                              [column]: e.target.value,
+                              [col]: e.target.value,
                             };
                             setIncorrectRows(updated);
                           }}
                         />
                       </td>
                     ))}
+
+                    {/* farmer_photo editable but not required */}
+                    <td>
+                      <input
+                        value={row.farmer_photo ?? ""}
+                        placeholder="optional"
+                        onChange={(e) => {
+                          const updated = [...incorrectRows];
+                          updated[index] = {
+                            ...updated[index],
+                            farmer_photo: e.target.value || undefined,
+                          };
+                          setIncorrectRows(updated);
+                        }}
+                      />
+                    </td>
 
                     <td style={{ color: "red" }}>
                       {row.__errors?.join(", ")}
