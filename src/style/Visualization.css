@@ -553,12 +553,19 @@
 /* Farmer ID badge */
 .farmer-id {
   font-family: var(--mono);
-  font-size: 12px;
-  background: #eff6ff;
+  font-size:12px;
   color: var(--blue);
-  padding: 3px 8px;
+  padding: 0px 5px;
   border-radius: var(--radius-sm);
   font-weight: 500;
+
+  /* FIX FOR SAFARI / MACBOOK */
+  display: inline-block;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: unset;
+  max-width: none;
+  flex-shrink: 0;
 }
 
 .null-val { color: var(--text-muted); font-style: italic; }
