@@ -3,7 +3,9 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
+import CountUp from "react-countup";
 import "leaflet/dist/leaflet.css";
+import "../style/Visualization.css";
 import "../style/LpdataVisualization.css";
 
 import {
@@ -13,7 +15,6 @@ import {
   filterParcels,
   getUniqueValues,
   getProjects,
-  getFarmersList,
   getVillagesList,
   getStatesList,
   getDistrictsList,
@@ -24,68 +25,98 @@ import {
 /* ─────────────────────────────────────────────
    CONSTANTS
 ───────────────────────────────────────────── */
-const SORTABLE_COLUMNS = [
-  { value: "created_at",  label: "Created Date" },
-  { value: "area_ha",     label: "Area (ha)" },
-  { value: "farmer_name", label: "Farmer Name" },
-  { value: "district",    label: "District" },
-  { value: "village",     label: "Village" },
-  { value: "state",       label: "State" },
-  { value: "plot_num",    label: "Plot No." },
-];
-
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500];
 
 const MAP_TILES = {
   satellite: {
     name: "Satellite",
-    url:  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "Esri",
   },
   dark: {
     name: "Dark",
-    url:  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
     attribution: "© CARTO",
   },
   light: {
     name: "Light",
-    url:  "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
     attribution: "© CARTO",
   },
 };
 
 const POLYGON_STYLE = {
-  color: "#00e5a0", weight: 1.5, opacity: 0.85,
-  fillColor: "#00e5a0", fillOpacity: 0.12,
+  color: "#00e5a0",
+  weight: 1.5,
+  opacity: 0.85,
+  fillColor: "#00e5a0",
+  fillOpacity: 0.12,
 };
+
 const POLYGON_SELECTED = {
-  color: "#fbbf24", weight: 3, opacity: 1,
-  fillColor: "#fbbf24", fillOpacity: 0.28,
+  color: "#fbbf24",
+  weight: 3,
+  opacity: 1,
+  fillColor: "#fbbf24",
+  fillOpacity: 0.28,
 };
+
+/* ─────────────────────────────────────────────
+   SECTION HEADER - SAME AS FARMER DASHBOARD
+───────────────────────────────────────────── */
+const SectionHeader = ({ icon, title, subtitle, badge }) => (
+  <div className="section-header">
+    <div className="section-header-left">
+      <span className="section-icon">{icon}</span>
+      <div>
+        <h2 className="section-title">{title}</h2>
+        {subtitle && <p className="section-subtitle">{subtitle}</p>}
+      </div>
+    </div>
+    {badge && <span className="section-badge">{badge}</span>}
+  </div>
+);
 
 /* ─────────────────────────────────────────────
    FILTER STATE REDUCER
 ───────────────────────────────────────────── */
 const FILTER_INIT = {
-  // server-side params
-  farmer_name: "", state: "", district: "", village: "",
-  project_id: "", is_active: "",
-  area_ha_min: "", area_ha_max: "",
-  created_from: "", created_to: "",
-  sort_by: "created_at", sort_dir: "DESC",
-  page: 1, limit: 0,
-  // client-side instant search
+  farmer_name: "",
+  state: "",
+  district: "",
+  village: "",
+  project_id: "",
+  is_active: "",
+  area_ha_min: "",
+  area_ha_max: "",
+  created_from: "",
+  created_to: "",
+  sort_by: "created_at",
+  sort_dir: "DESC",
+  page: 1,
+  limit: 0,
   search: "",
 };
 
 function filterReducer(state, action) {
   switch (action.type) {
-    case "SET":     return { ...state, [action.key]: action.value, page: 1 };
-    case "SET_PAGE":return { ...state, page: action.value };
-    case "SET_LIMIT":return { ...state, limit: action.value, page: 1 };
-    case "SORT":    return { ...state, sort_by: action.sort_by, sort_dir: action.sort_dir, page: 1 };
-    case "CLEAR":   return { ...FILTER_INIT };
-    default:        return state;
+    case "SET":
+      return { ...state, [action.key]: action.value, page: 1 };
+    case "SET_PAGE":
+      return { ...state, page: action.value };
+    case "SET_LIMIT":
+      return { ...state, limit: action.value, page: 1 };
+    case "SORT":
+      return {
+        ...state,
+        sort_by: action.sort_by,
+        sort_dir: action.sort_dir,
+        page: 1,
+      };
+    case "CLEAR":
+      return { ...FILTER_INIT };
+    default:
+      return state;
   }
 }
 
@@ -95,7 +126,8 @@ function filterReducer(state, action) {
 function fmt(n, dec = 2) {
   if (n == null || isNaN(n)) return "—";
   return Number(n).toLocaleString("en-IN", {
-    minimumFractionDigits: dec, maximumFractionDigits: dec,
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
   });
 }
 
@@ -110,29 +142,45 @@ function shortId(id) {
 ───────────────────────────────────────────── */
 function FitBounds({ geojson }) {
   const map = useMap();
+
   useEffect(() => {
     if (!geojson?.features?.length) return;
+
     try {
       const bounds = window.L.geoJSON(geojson).getBounds();
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
-    } catch (e) { console.error(e); }
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      }
+    } catch (e) {
+      console.error(e);
+    }
   }, [geojson, map]);
+
   return null;
 }
 
 function HighlightFeature({ featureId, geojson }) {
   const map = useMap();
+
   useEffect(() => {
     if (!featureId || !geojson) return;
+
     try {
       const target = geojson.features.find(
-        f => f.properties.id === featureId || f.properties.parcel_id === featureId
+        (f) => f.properties.id === featureId || f.properties.parcel_id === featureId
       );
+
       if (!target) return;
+
       const bounds = window.L.geoJSON(target).getBounds();
-      if (bounds.isValid()) map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-    } catch (e) { console.error(e); }
+      if (bounds.isValid()) {
+        map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+      }
+    } catch (e) {
+      console.error(e);
+    }
   }, [featureId, geojson, map]);
+
   return null;
 }
 
@@ -141,58 +189,60 @@ function HighlightFeature({ featureId, geojson }) {
 ───────────────────────────────────────────── */
 export default function LpdataVisualization() {
   const navigate = useNavigate();
-  const token    = localStorage.getItem("token") ||
-                   sessionStorage.getItem("token") ||
-                   sessionStorage.getItem("lp_jwt");
 
-  const [parcels,     setParcels]     = useState([]);
-  const [pagination,  setPagination]  = useState(null);
-  const [loading,     setLoading]     = useState(true);
-  const [fetching,    setFetching]    = useState(false); // subtle re-fetch indicator
-  const [error,       setError]       = useState("");
-  const [selectedId,  setSelectedId]  = useState(null);
-  const [mapStyle,    setMapStyle]    = useState("satellite");
-  const [activeTab,   setActiveTab]   = useState("parcels");
-  const [filters,     dispatch]       = useReducer(filterReducer, FILTER_INIT);
+  const token =
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("lp_jwt");
+
+  const [parcels, setParcels] = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  const [showDetails, setShowDetails] = useState(null);
+  const [mapStyle, setMapStyle] = useState("satellite");
+  const [activeTab, setActiveTab] = useState("parcels");
+  const [filters, dispatch] = useReducer(filterReducer, FILTER_INIT);
 
   const geoJsonLayerRef = useRef(null);
-  // debounce timer for text inputs
-  const debounceRef     = useRef(null);
+  const debounceRef = useRef(null);
 
-  /* ─── AUTH CHECK ─── */
   useEffect(() => {
     if (!token) navigate("/login");
   }, [token, navigate]);
 
-  /* ─── FETCH (re-runs when server-side params change) ─── */
   useEffect(() => {
     if (!token) return;
 
     const isInitial = parcels.length === 0;
-    if (isInitial) setLoading(true); else setFetching(true);
+    if (isInitial) setLoading(true);
+    else setFetching(true);
+
     setError("");
 
-    // Build server params (exclude client-side 'search')
     const serverParams = {
-      farmer_name:  filters.farmer_name  || undefined,
-      state:        filters.state        || undefined,
-      district:     filters.district     || undefined,
-      village:      filters.village      || undefined,
-      project_id:   filters.project_id   || undefined,
-      is_active:    filters.is_active !== "" ? filters.is_active : undefined,
-      area_ha_min:  filters.area_ha_min  || undefined,
-      area_ha_max:  filters.area_ha_max  || undefined,
+      farmer_name: filters.farmer_name || undefined,
+      state: filters.state || undefined,
+      district: filters.district || undefined,
+      village: filters.village || undefined,
+      project_id: filters.project_id || undefined,
+      is_active: filters.is_active !== "" ? filters.is_active : undefined,
+      area_ha_min: filters.area_ha_min || undefined,
+      area_ha_max: filters.area_ha_max || undefined,
       created_from: filters.created_from || undefined,
-      created_to:   filters.created_to   || undefined,
-      sort_by:      filters.sort_by,
-      sort_dir:     filters.sort_dir,
-      page:         filters.page,
-      limit:        filters.limit,
+      created_to: filters.created_to || undefined,
+      sort_by: filters.sort_by,
+      sort_dir: filters.sort_dir,
+      page: filters.page,
+      limit: filters.limit,
     };
 
     fetchLandParcels(serverParams).then(({ data, pagination: pg, error: err }) => {
       if (err) {
         setError(err);
+
         if (err.includes("Session expired") || err.includes("401") || err.includes("403")) {
           localStorage.removeItem("token");
           sessionStorage.removeItem("token");
@@ -203,50 +253,95 @@ export default function LpdataVisualization() {
         setParcels(data || []);
         setPagination(pg);
       }
+
       setLoading(false);
       setFetching(false);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    filters.farmer_name, filters.state, filters.district, filters.village,
-    filters.project_id, filters.is_active, filters.area_ha_min, filters.area_ha_max,
-    filters.created_from, filters.created_to,
-    filters.sort_by, filters.sort_dir,
-    filters.page, filters.limit,
+    filters.farmer_name,
+    filters.state,
+    filters.district,
+    filters.village,
+    filters.project_id,
+    filters.is_active,
+    filters.area_ha_min,
+    filters.area_ha_max,
+    filters.created_from,
+    filters.created_to,
+    filters.sort_by,
+    filters.sort_dir,
+    filters.page,
+    filters.limit,
   ]);
 
-  /* ─── CLIENT-SIDE INSTANT SEARCH (over loaded page) ─── */
   const filteredParcels = useMemo(
     () => filterParcels(parcels, { search: filters.search }),
     [parcels, filters.search]
   );
 
-  const geojson = useMemo(() => parcelsToGeoJSON(filteredParcels), [filteredParcels]);
+  const geojson = useMemo(
+    () => parcelsToGeoJSON(filteredParcels),
+    [filteredParcels]
+  );
 
-  /* ─── SUMMARY (over loaded page) ─── */
-  const summary = useMemo(() => computeSummary(parcels), [parcels]);
+  const summary = useMemo(
+    () => computeSummary(filteredParcels),
+    [filteredParcels]
+  );
 
-  /* ─── DROPDOWN OPTIONS (from loaded page) ─── */
-  const statusOptions   = useMemo(() => getUniqueValues(parcels, "status"),   [parcels]);
-  const districtOptions = useMemo(() => getDistrictsList(parcels),             [parcels]);
-  const projectOptions  = useMemo(() => getProjects(parcels),                  [parcels]);
-  const villagesList    = useMemo(() => getVillagesList(parcels),              [parcels]);
-  const statesList      = useMemo(() => getStatesList(parcels),                [parcels]);
-  const farmerAggregation = useMemo(() => aggregateByFarmer(parcels),         [parcels]);
-  const villageAggregation= useMemo(() => aggregateByVillage(parcels),        [parcels]);
+  const statusOptions = useMemo(
+    () => getUniqueValues(parcels, "status"),
+    [parcels]
+  );
 
-  /* ─── HANDLERS ─── */
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem("token");
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("lp_jwt");
-    navigate("/login");
-  }, [navigate]);
+  const districtOptions = useMemo(
+    () => getDistrictsList(parcels),
+    [parcels]
+  );
 
-  // Debounced text filter setter (waits 400ms before hitting server)
+  const projectOptions = useMemo(
+    () => getProjects(parcels),
+    [parcels]
+  );
+
+  const villagesList = useMemo(
+    () => getVillagesList(parcels),
+    [parcels]
+  );
+
+  const statesList = useMemo(
+    () => getStatesList(parcels),
+    [parcels]
+  );
+
+  const farmerAggregation = useMemo(
+    () => aggregateByFarmer(filteredParcels),
+    [filteredParcels]
+  );
+
+  const villageAggregation = useMemo(
+    () => aggregateByVillage(filteredParcels),
+    [filteredParcels]
+  );
+
+  const totalProjectsCount = useMemo(() => {
+    if (summary.totalProjects != null && !isNaN(summary.totalProjects)) {
+      return summary.totalProjects;
+    }
+
+    if (summary.project != null && !isNaN(summary.project)) {
+      return summary.project;
+    }
+
+    return getProjects(filteredParcels).length;
+  }, [summary, filteredParcels]);
+
   const setServerFilter = useCallback((key, value) => {
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => dispatch({ type: "SET", key, value }), 400);
+    debounceRef.current = setTimeout(() => {
+      dispatch({ type: "SET", key, value });
+    }, 400);
   }, []);
 
   const setInstantFilter = useCallback((key, value) => {
@@ -256,27 +351,31 @@ export default function LpdataVisualization() {
   const handleSort = useCallback((col) => {
     dispatch({
       type: "SORT",
-      sort_by:  col,
+      sort_by: col,
       sort_dir: filters.sort_by === col && filters.sort_dir === "ASC" ? "DESC" : "ASC",
     });
   }, [filters.sort_by, filters.sort_dir]);
 
-  const clearFilters = useCallback(() => dispatch({ type: "CLEAR" }), []);
+  const clearFilters = useCallback(() => {
+    dispatch({ type: "CLEAR" });
+  }, []);
 
   const handleRowClick = useCallback((parcel) => {
     const id = parcel.id || parcel.parcel_id;
-    setSelectedId(prev => prev === id ? null : id);
+    setSelectedId((prev) => (prev === id ? null : id));
     setShowDetails(null);
   }, []);
 
   const handleViewDetails = useCallback((parcel, e) => {
     if (e) e.stopPropagation();
+
     const id = parcel.id || parcel.parcel_id;
-    setShowDetails(prev => prev?.id === id ? null : parcel);
+    setShowDetails((prev) => (prev?.id === id ? null : parcel));
   }, []);
 
   const onEachFeature = useCallback((feature, layer) => {
     const p = feature.properties;
+
     layer.bindPopup(`
       <div class="lp-popup-title">${p.name || "Land Parcel"}</div>
       <div class="lp-popup-row">Plot: <strong>${p.plot_num || "—"}</strong></div>
@@ -292,145 +391,257 @@ export default function LpdataVisualization() {
     `, { className: "lp-popup" });
 
     layer.on("click", () => {
-      setSelectedId(prev =>
+      setSelectedId((prev) =>
         prev === (p.id || p.parcel_id) ? null : (p.id || p.parcel_id)
       );
     });
   }, []);
 
-  const hasFilters = Object.keys(FILTER_INIT).some(k => {
-    if (k === "sort_by")  return filters[k] !== "created_at";
+  const hasFilters = Object.keys(FILTER_INIT).some((k) => {
+    if (k === "sort_by") return filters[k] !== "created_at";
     if (k === "sort_dir") return filters[k] !== "DESC";
-    if (k === "page")     return false;
-    if (k === "limit")    return filters[k] !== 50;
+    if (k === "page") return false;
+    if (k === "limit") return filters[k] !== 0;
     return filters[k] !== "";
   });
 
   const sortIcon = (col) => {
-    if (filters.sort_by !== col) return <span className="lp-sort-icon">↕</span>;
-    return <span className="lp-sort-icon lp-sort-active">{filters.sort_dir === "ASC" ? "↑" : "↓"}</span>;
+    if (filters.sort_by !== col) {
+      return <span className="lp-sort-icon">↕</span>;
+    }
+
+    return (
+      <span className="lp-sort-icon lp-sort-active">
+        {filters.sort_dir === "ASC" ? "↑" : "↓"}
+      </span>
+    );
   };
 
-  /* ─── LOADING ─── */
-  if (loading) return (
-    <div className="lp-loader">
-      <div className="lp-spinner" />
-      <p className="lp-loader-text">FETCHING LAND PARCEL DATA...</p>
-    </div>
-  );
-
-  /* ─── ERROR ─── */
-  if (error) return (
-    <div className="lp-error-screen">
-      <div className="lp-error-box">
-        <h2>⚠️ API Error</h2>
-        <p>{error}</p>
-        <button className="lp-btn" onClick={() => window.location.reload()}>Retry</button>
+  if (loading) {
+    return (
+      <div className="lp-loader">
+        <div className="lp-spinner" />
+        <p className="lp-loader-text">FETCHING LAND PARCEL DATA...</p>
       </div>
-    </div>
-  );
+    );
+  }
 
-  /* ─── RENDER ─── */
+  if (error) {
+    return (
+      <div className="lp-error-screen">
+        <div className="lp-error-box">
+          <h2>⚠️ API Error</h2>
+          <p>{error}</p>
+          <button className="lp-btn" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalParcelValue = filters.search
+    ? filteredParcels.length
+    : pagination?.total ?? summary.totalParcels;
+
   return (
     <div className="lp-root">
       <main className="lp-main">
 
-        {/* STATS */}
-        <div className="lp-stats-row">
-          {[
-            { label: "Total Parcels",  value: pagination?.total ?? summary.totalParcels, unit: "registered parcels" },
-            { label: "Total Area",    value: fmt(summary.totalHectares), unit: "hectares" },
-            { label: "Total Farmers", value: summary.totalFarmers,   unit: "farmers" },
-            // { label: "Villages",       value: summary.totalVillages,  unit: "villages" },
-            { label: "All Districts",      value: summary.totalDistricts, unit: "districts" },
-          ].map((s, i) => (
-            <div key={i} className="lp-stat-card lp-stat-amber">
-              <p className="lp-stat-label">{s.label}</p>
-              <p className="lp-stat-value">{typeof s.value === "number" ? s.value.toLocaleString("en-IN") : s.value}</p>
-              <p className="lp-stat-unit">{s.unit}</p>
+        {/* STATS - SAME UI AS FARMER DASHBOARD */}
+        <section className="dash-section">
+          <SectionHeader
+            icon="📊"
+            title="Overview"
+            subtitle="Key performance indicators"
+          />
+
+          <div className="kpi-grid">
+            {[
+              {
+                label: "Total Parcels",
+                value: totalParcelValue,
+                icon: "🗺️",
+                decimals: 0,
+                suffix: "",
+              },
+              {
+                label: "Total Area",
+                value: Number(summary.totalHectares || 0),
+                icon: "📐",
+                decimals: 2,
+                suffix: " ha",
+              },
+              {
+                label: "Total Farmers",
+                value: summary.totalFarmers,
+                icon: "👨‍🌾",
+                decimals: 0,
+                suffix: "",
+              },
+              {
+                label: "Districts",
+                value: summary.totalDistricts,
+                icon: "📍",
+                decimals: 0,
+                suffix: "",
+              },
+              {
+                label: "Projects",
+                value: totalProjectsCount,
+                icon: "📂",
+                decimals: 0,
+                suffix: "",
+              },
+            ].map((s) => (
+              <div
+                className="kpi-card"
+                key={s.label}
+                style={{ "--kpi-color": "#2563eb" }}
+              >
+                <div className="kpi-icon-wrap">{s.icon}</div>
+
+                <div className="kpi-body">
+                  <p className="kpi-label">{s.label}</p>
+                  <h2 className="kpi-value">
+                    <CountUp
+                      end={Number(s.value) || 0}
+                      duration={2}
+                      decimals={s.decimals}
+                      separator=","
+                    />
+                    {s.suffix}
+                  </h2>
+                </div>
+
+                <div className="kpi-bar" style={{ background: "#2563eb" }} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* FILTERS - SAME UI AS FARMER DASHBOARD */}
+        <section className="dash-section">
+          <SectionHeader
+            icon="🔽"
+            title="Filters"
+            subtitle="Narrow down land parcel records"
+          />
+
+          <div className="filter-panel">
+            <div className="filter-group">
+              <label className="filter-label">PROJECT</label>
+              <select
+                className="filter-select"
+                value={filters.project_id}
+                onChange={(e) => setInstantFilter("project_id", e.target.value)}
+              >
+                <option value="">All Projects</option>
+                {projectOptions.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
             </div>
-          ))}
-        </div>
 
-        {/* FILTER BAR */}
-        <div className="lp-filter-bar">
-          {/* Instant search */}
-          <input
-            className="lp-search-input"
-            placeholder="Quick search: name, farmer, ID, plot…"
-            defaultValue={filters.search}
-            onChange={e => dispatch({ type: "SET", key: "search", value: e.target.value })}
-          />
+            <div className="filter-group">
+              <label className="filter-label">STATE</label>
+              <select
+                className="filter-select"
+                value={filters.state}
+                onChange={(e) => setInstantFilter("state", e.target.value)}
+              >
+                <option value="">All States</option>
+                {statesList.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* Server-side filters */}
-          <input
-            className="lp-filter-input"
-            placeholder="Farmer name…"
-            defaultValue={filters.farmer_name}
-            onChange={e => setServerFilter("farmer_name", e.target.value)}
-          />
+            <div className="filter-group">
+              <label className="filter-label">DISTRICT</label>
+              <select
+                className="filter-select"
+                value={filters.district}
+                onChange={(e) => setInstantFilter("district", e.target.value)}
+              >
+                <option value="">All Districts</option>
+                {districtOptions.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
 
-          <select className="lp-select" value={filters.state}
-            onChange={e => setInstantFilter("state", e.target.value)}>
-            <option value="">All States</option>
-            {statesList.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+            <div className="filter-group">
+              <label className="filter-label">VILLAGE</label>
+              <select
+                className="filter-select"
+                value={filters.village}
+                onChange={(e) => setInstantFilter("village", e.target.value)}
+              >
+                <option value="">All Villages</option>
+                {villagesList.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </div>
 
-          <select className="lp-select" value={filters.district}
-            onChange={e => setInstantFilter("district", e.target.value)}>
-            <option value="">All Districts</option>
-            {districtOptions.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
+            <div className="header-search">
+              <span className="search-icon">🔍</span>
+              <input
+                type="text"
+                placeholder="Search farmer, ID, plot..."
+                value={filters.search}
+                onChange={(e) => dispatch({
+                  type: "SET",
+                  key: "search",
+                  value: e.target.value,
+                })}
+                className="header-search-input"
+              />
+            </div>
 
-          <select className="lp-select" value={filters.village}
-            onChange={e => setInstantFilter("village", e.target.value)}>
-            <option value="">All Villages</option>
-            {villagesList.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-
-          <select className="lp-select" value={filters.project_id}
-            onChange={e => setInstantFilter("project_id", e.target.value)}>
-            <option value="">All Projects</option>
-            {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-
-          {hasFilters && (
-            <button className="lp-btn lp-btn-clear" onClick={clearFilters}>✕ Clear All</button>
-          )}
-        </div>
+            <button className="btn-reset" onClick={clearFilters}>
+              ↺ Reset All
+            </button>
+          </div>
+        </section>
 
         {/* MAP STYLE BAR */}
         <div className="lp-map-style-bar">
           <span className="lp-map-style-label">Map:</span>
           {Object.entries(MAP_TILES).map(([key, tile]) => (
-            <button key={key}
+            <button
+              key={key}
               className={`lp-map-style-btn ${mapStyle === key ? "lp-map-style-active" : ""}`}
-              onClick={() => setMapStyle(key)}>
+              onClick={() => setMapStyle(key)}
+            >
               {tile.name}
             </button>
           ))}
+
+          {fetching && <span className="lp-fetching-text">Updating...</span>}
         </div>
 
         {/* CONTENT GRID */}
         <div className="lp-content-grid">
 
-          {/* TABLE PANEL — LEFT */}
+          {/* TABLE PANEL */}
           <div className="lp-panel lp-panel-table">
             <div className="lp-panel-header">
               <div className="lp-panel-title">
                 <span className="lp-panel-dot lp-dot-amber" />
-                {activeTab === "parcels"  && "Parcel Records"}
-                {activeTab === "farmers"  && "Farmer Summary"}
+                {activeTab === "parcels" && "Parcel Records"}
+                {activeTab === "farmers" && "Farmer Summary"}
                 {activeTab === "villages" && "Village Summary"}
               </div>
+
               <div className="lp-panel-meta">
-                {activeTab === "parcels" && "Click row → zoom map · 👁 → details"}
+                {activeTab === "parcels" && "Click row → zoom map · Show Parcel → details"}
               </div>
             </div>
 
             <div className="lp-table-wrap">
 
-              {/* ── PARCELS TABLE ── */}
               {activeTab === "parcels" && (
                 <table className="lp-table">
                   <thead>
@@ -464,16 +675,29 @@ export default function LpdataVisualization() {
                       <th>Action</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {filteredParcels.length === 0 ? (
-                      <tr><td colSpan={11} className="lp-table-empty">No parcels found</td></tr>
+                      <tr>
+                        <td colSpan={11} className="lp-table-empty">
+                          No parcels found
+                        </td>
+                      </tr>
                     ) : filteredParcels.map((parcel, idx) => {
-                      const id       = parcel.id || parcel.parcel_id;
+                      const id = parcel.id || parcel.parcel_id;
                       const selected = id === selectedId;
+
                       return (
-                        <tr key={id ?? idx} className={selected ? "lp-tr-selected" : ""}
-                          onClick={() => handleRowClick(parcel)}>
-                          <td className="lp-cell-idx">{(filters.page - 1) * filters.limit + idx + 1}</td>
+                        <tr
+                          key={id ?? idx}
+                          className={selected ? "lp-tr-selected" : ""}
+                          onClick={() => handleRowClick(parcel)}
+                        >
+                          <td className="lp-cell-idx">
+                            {filters.limit === 0
+                              ? idx + 1
+                              : (filters.page - 1) * filters.limit + idx + 1}
+                          </td>
                           <td className="lp-cell-mono">{shortId(id)}</td>
                           <td className="lp-cell-mono">{parcel.project_id || "—"}</td>
                           <td>{fmt(parcel.area_ha)}</td>
@@ -487,11 +711,12 @@ export default function LpdataVisualization() {
                             <button
                               className="lp-row-map-btn"
                               title="Show on map & view details"
-                              onClick={e => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedId(id);
                                 handleViewDetails(parcel, e);
-                              }}>
+                              }}
+                            >
                               Show Parcel
                             </button>
                           </td>
@@ -502,165 +727,239 @@ export default function LpdataVisualization() {
                 </table>
               )}
 
-              {/* ── FARMERS TABLE ── */}
               {activeTab === "farmers" && (
                 <table className="lp-table">
                   <thead>
                     <tr>
-                      <th>#</th><th>Farmer Name</th><th>State</th>
-                      <th>District</th><th>Village</th>
-                      <th>Parcels</th><th>Area (ha)</th><th>Filter</th>
+                      <th>#</th>
+                      <th>Farmer Name</th>
+                      <th>State</th>
+                      <th>District</th>
+                      <th>Village</th>
+                      <th>Parcels</th>
+                      <th>Area (ha)</th>
+                      <th>Filter</th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {farmerAggregation.length === 0
-                      ? <tr><td colSpan={8} className="lp-table-empty">No farmer data</td></tr>
-                      : farmerAggregation.map((f, idx) => (
-                        <tr key={f.farmer_id || idx}>
-                          <td className="lp-cell-idx">{idx + 1}</td>
-                          <td>
-                            <strong>{f.farmer_name}</strong>
-                            <br /><small className="lp-text-muted">{shortId(f.farmer_id)}</small>
-                          </td>
-                          <td>{f.state || "—"}</td>
-                          <td>{f.district || "—"}</td>
-                          <td>{f.village || "—"}</td>
-                          <td>{f.total_parcels}</td>
-                          <td>{fmt(f.total_area_ha)}</td>
-                          <td>
-                            <button className="lp-row-map-btn"
-                              onClick={() => {
-                                dispatch({ type: "SET", key: "farmer_name", value: f.farmer_name });
-                                setActiveTab("parcels");
-                              }}>
-                              📋 Parcels
-                            </button>
-                          </td>
-                        </tr>
+                    {farmerAggregation.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="lp-table-empty">
+                          No farmer data
+                        </td>
+                      </tr>
+                    ) : farmerAggregation.map((f, idx) => (
+                      <tr key={f.farmer_id || idx}>
+                        <td className="lp-cell-idx">{idx + 1}</td>
+                        <td>
+                          <strong>{f.farmer_name}</strong>
+                          <br />
+                          <small className="lp-text-muted">{shortId(f.farmer_id)}</small>
+                        </td>
+                        <td>{f.state || "—"}</td>
+                        <td>{f.district || "—"}</td>
+                        <td>{f.village || "—"}</td>
+                        <td>{f.total_parcels}</td>
+                        <td>{fmt(f.total_area_ha)}</td>
+                        <td>
+                          <button
+                            className="lp-row-map-btn"
+                            onClick={() => {
+                              dispatch({ type: "SET", key: "farmer_name", value: f.farmer_name });
+                              setActiveTab("parcels");
+                            }}
+                          >
+                            📋 Parcels
+                          </button>
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
               )}
 
-              {/* ── VILLAGES TABLE ── */}
               {activeTab === "villages" && (
                 <table className="lp-table">
                   <thead>
                     <tr>
-                      <th>#</th><th>Village</th><th>District</th><th>State</th>
-                      <th>Parcels</th><th>Area (ha)</th><th>Farmers</th><th>Filter</th>
+                      <th>#</th>
+                      <th>Village</th>
+                      <th>District</th>
+                      <th>State</th>
+                      <th>Parcels</th>
+                      <th>Area (ha)</th>
+                      <th>Farmers</th>
+                      <th>Filter</th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {villageAggregation.length === 0
-                      ? <tr><td colSpan={8} className="lp-table-empty">No village data</td></tr>
-                      : villageAggregation.map((v, idx) => (
-                        <tr key={v.village}>
-                          <td className="lp-cell-idx">{idx + 1}</td>
-                          <td><strong>{v.village}</strong></td>
-                          <td>{v.district || "—"}</td>
-                          <td>{v.state || "—"}</td>
-                          <td>{v.total_parcels}</td>
-                          <td>{fmt(v.total_area_ha)}</td>
-                          <td>{v.total_farmers}</td>
-                          <td>
-                            <button className="lp-row-map-btn"
-                              onClick={() => {
-                                dispatch({ type: "SET", key: "village", value: v.village });
-                                setActiveTab("parcels");
-                              }}>
-                              📋 Parcels
-                            </button>
-                          </td>
-                        </tr>
+                    {villageAggregation.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="lp-table-empty">
+                          No village data
+                        </td>
+                      </tr>
+                    ) : villageAggregation.map((v, idx) => (
+                      <tr key={v.village}>
+                        <td className="lp-cell-idx">{idx + 1}</td>
+                        <td><strong>{v.village}</strong></td>
+                        <td>{v.district || "—"}</td>
+                        <td>{v.state || "—"}</td>
+                        <td>{v.total_parcels}</td>
+                        <td>{fmt(v.total_area_ha)}</td>
+                        <td>{v.total_farmers}</td>
+                        <td>
+                          <button
+                            className="lp-row-map-btn"
+                            onClick={() => {
+                              dispatch({ type: "SET", key: "village", value: v.village });
+                              setActiveTab("parcels");
+                            }}
+                          >
+                            📋 Parcels
+                          </button>
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
               )}
             </div>
 
-            {/* PAGINATION (shown only in parcels tab) */}
             {activeTab === "parcels" && pagination && (
               <div className="lp-pagination">
                 <div className="lp-pagination-info">
                   Showing&nbsp;
-                  <strong>{filters.limit === 0 ? 1 : (filters.page - 1) * filters.limit + 1}</strong>
+                  <strong>
+                    {filters.limit === 0 ? 1 : (filters.page - 1) * filters.limit + 1}
+                  </strong>
                   &nbsp;–&nbsp;
-                  <strong>{filters.limit === 0 ? pagination.total : Math.min(filters.page * filters.limit, pagination.total)}</strong>
+                  <strong>
+                    {filters.limit === 0
+                      ? pagination.total
+                      : Math.min(filters.page * filters.limit, pagination.total)}
+                  </strong>
                   &nbsp;of&nbsp;<strong>{pagination.total}</strong>
                 </div>
 
                 <div className="lp-page-size">
                   <span>Rows:</span>
-                  {PAGE_SIZE_OPTIONS.map(n => (
-                    <button key={n}
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <button
+                      key={n}
                       className={`lp-page-size-btn ${filters.limit === n ? "lp-page-size-active" : ""}`}
-                      onClick={() => dispatch({ type: "SET_LIMIT", value: n })}>
+                      onClick={() => dispatch({ type: "SET_LIMIT", value: n })}
+                    >
                       {n}
                     </button>
                   ))}
+
                   <button
                     className={`lp-page-size-btn ${filters.limit === 0 ? "lp-page-size-active" : ""}`}
-                    onClick={() => dispatch({ type: "SET_LIMIT", value: 0 })}>
+                    onClick={() => dispatch({ type: "SET_LIMIT", value: 0 })}
+                  >
                     All
                   </button>
                 </div>
 
                 <div className="lp-page-controls">
-                  <button className="lp-page-btn" disabled={!pagination.has_prev}
-                    onClick={() => dispatch({ type: "SET_PAGE", value: 1 })}>«</button>
-                  <button className="lp-page-btn" disabled={!pagination.has_prev}
-                    onClick={() => dispatch({ type: "SET_PAGE", value: filters.page - 1 })}>‹</button>
+                  <button
+                    className="lp-page-btn"
+                    disabled={!pagination.has_prev}
+                    onClick={() => dispatch({ type: "SET_PAGE", value: 1 })}
+                  >
+                    «
+                  </button>
 
-                  {/* Page number pills */}
+                  <button
+                    className="lp-page-btn"
+                    disabled={!pagination.has_prev}
+                    onClick={() => dispatch({ type: "SET_PAGE", value: filters.page - 1 })}
+                  >
+                    ‹
+                  </button>
+
                   {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
-                    const start = Math.max(1, Math.min(filters.page - 2, pagination.total_pages - 4));
-                    const pg    = start + i;
+                    const start = Math.max(
+                      1,
+                      Math.min(filters.page - 2, pagination.total_pages - 4)
+                    );
+                    const pg = start + i;
+
                     return (
-                      <button key={pg}
+                      <button
+                        key={pg}
                         className={`lp-page-btn lp-page-num ${filters.page === pg ? "lp-page-current" : ""}`}
-                        onClick={() => dispatch({ type: "SET_PAGE", value: pg })}>
+                        onClick={() => dispatch({ type: "SET_PAGE", value: pg })}
+                      >
                         {pg}
                       </button>
                     );
                   })}
 
-                  <button className="lp-page-btn" disabled={!pagination.has_next}
-                    onClick={() => dispatch({ type: "SET_PAGE", value: filters.page + 1 })}>›</button>
-                  <button className="lp-page-btn" disabled={!pagination.has_next}
-                    onClick={() => dispatch({ type: "SET_PAGE", value: pagination.total_pages })}>»</button>
+                  <button
+                    className="lp-page-btn"
+                    disabled={!pagination.has_next}
+                    onClick={() => dispatch({ type: "SET_PAGE", value: filters.page + 1 })}
+                  >
+                    ›
+                  </button>
+
+                  <button
+                    className="lp-page-btn"
+                    disabled={!pagination.has_next}
+                    onClick={() => dispatch({ type: "SET_PAGE", value: pagination.total_pages })}
+                  >
+                    »
+                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* MAP PANEL — RIGHT */}
+          {/* MAP PANEL */}
           <div className="lp-panel lp-panel-map">
             <div className="lp-panel-header">
               <div className="lp-panel-title">
                 <span className="lp-panel-dot lp-dot-accent" />
                 Parcel Map — {MAP_TILES[mapStyle].name}
               </div>
-              <div className="lp-panel-meta">{geojson.features.length} polygons</div>
+
+              <div className="lp-panel-meta">
+                {geojson.features.length} polygons
+              </div>
             </div>
+
             <div className="lp-map-container">
-              <MapContainer center={[20.5937, 78.9629]} zoom={5} className="lp-leaflet-map">
-                <TileLayer url={MAP_TILES[mapStyle].url} attribution={MAP_TILES[mapStyle].attribution} />
+              <MapContainer
+                center={[20.5937, 78.9629]}
+                zoom={5}
+                className="lp-leaflet-map"
+              >
+                <TileLayer
+                  url={MAP_TILES[mapStyle].url}
+                  attribution={MAP_TILES[mapStyle].attribution}
+                />
+
                 <GeoJSON
                   ref={geoJsonLayerRef}
                   data={geojson}
-                  style={feature =>
-                    (feature.properties.id === selectedId || feature.properties.parcel_id === selectedId)
-                      ? POLYGON_SELECTED : POLYGON_STYLE
+                  style={(feature) =>
+                    feature.properties.id === selectedId ||
+                    feature.properties.parcel_id === selectedId
+                      ? POLYGON_SELECTED
+                      : POLYGON_STYLE
                   }
                   onEachFeature={onEachFeature}
                 />
+
                 <FitBounds geojson={geojson} />
                 <HighlightFeature featureId={selectedId} geojson={geojson} />
               </MapContainer>
             </div>
           </div>
-
         </div>
       </main>
     </div>

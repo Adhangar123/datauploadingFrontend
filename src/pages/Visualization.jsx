@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer,
 } from "recharts";
 import { fetchFarmers, updateFarmer } from "../api/farmerApi";
-import LpdataVisualization from "./LpdataVisualization"; // ✅ IMPORT
+import LpdataVisualization from "./LpdataVisualization";
 import "../style/Visualization.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -28,6 +28,18 @@ const CSV_HEADERS = [
   "Gram Panchayat", "Village", "Project Code",
   "Onboarding Date", "Updated At", "Updated By",
 ];
+
+const projectNames = {
+  "FCF050": "African Bamboo",
+  "FCF053": "Biwal",
+  "FCF052": "Green Intelligence",
+  "FCF48":  "Shristi",
+  "FCF048": "Shristi ",
+  "FCF011": "Rangsang",
+  "FCF049": "Gram Vikas",
+  "FCF057": "SOOVA",
+  "FCF047": "Prasari",
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -229,9 +241,9 @@ const Visualization = () => {
   const generateStats = useCallback((farmers) => {
     setStats({
       farmers:   farmers.length,
-      states:    new Set(farmers.map((f) => f.state)).size,
-      districts: new Set(farmers.map((f) => f.district)).size,
-      projects:  new Set(farmers.map((f) => f.project_code)).size,
+      states:    new Set(farmers.map((f) => f.state).filter(Boolean)).size,
+      districts: new Set(farmers.map((f) => f.district).filter(Boolean)).size,
+      projects:  new Set(farmers.map((f) => f.project_code).filter(Boolean)).size,
     });
   }, []);
 
@@ -270,25 +282,62 @@ const Visualization = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Filters ───────────────────────────────────────────────────────────────────
+  // ─── Master Filter + Search Function ─────────────────────────────────────────
+  // ✅ Ek hi jagah se sab filter + search apply hoga
+  // ✅ Case-insensitive: "PuNaM", "punam", "PUNAM" sab match karenge
 
-  const applyFilters = useCallback((f, source) => {
+  const applyFiltersAndSearch = useCallback((activeFilters, query, source) => {
     let filtered = [...source];
-    if (f.project)  filtered = filtered.filter((x) => x.project_code === f.project);
-    if (f.state)    filtered = filtered.filter((x) => x.state === f.state);
-    if (f.district) filtered = filtered.filter((x) => x.district === f.district);
-    if (f.gp)       filtered = filtered.filter((x) => x.blocks === f.gp);
+
+    // ── Dropdown Filters (exact match, case-insensitive) ──────────────────────
+    if (activeFilters.project) {
+      filtered = filtered.filter(
+        (x) => (x.project_code || "").toLowerCase() === activeFilters.project.toLowerCase()
+      );
+    }
+    if (activeFilters.state) {
+      filtered = filtered.filter(
+        (x) => (x.state || "").toLowerCase() === activeFilters.state.toLowerCase()
+      );
+    }
+    if (activeFilters.district) {
+      filtered = filtered.filter(
+        (x) => (x.district || "").toLowerCase() === activeFilters.district.toLowerCase()
+      );
+    }
+    if (activeFilters.gp) {
+      filtered = filtered.filter(
+        (x) => (x.blocks || "").toLowerCase() === activeFilters.gp.toLowerCase()
+      );
+    }
+
+    // ── Search Query (ILIKE style — partial match, case-insensitive) ──────────
+    // ✅ Bilkul backend ke ILIKE '%PuNaM%' jaisa kaam karega
+    if (query.trim()) {
+      const q = query.trim().toLowerCase(); // "PuNaM" → "punam"
+      filtered = filtered.filter((f) =>
+        (f.farmer_name   || "").toLowerCase().includes(q) ||  // ILIKE farmer_name
+        (f.farmer_id     || "").toLowerCase().includes(q) ||  // ILIKE farmer_id
+        (f.district      || "").toLowerCase().includes(q) ||  // ILIKE district
+        (f.state         || "").toLowerCase().includes(q) ||  // ILIKE state
+        (f.blocks        || "").toLowerCase().includes(q) ||  // ILIKE blocks
+        (f.project_code  || "").toLowerCase().includes(q)     // ILIKE project_code
+      );
+    }
+
     setData(filtered);
     generateCharts(filtered);
     generateStats(filtered);
     setCurrentPage(1);
   }, [generateCharts, generateStats]);
 
+  // ── Filter Handler ────────────────────────────────────────────────────────────
+
   const handleFilter = (e) => {
     const { name, value } = e.target;
     const newFilters = { ...filters, [name]: value };
     setFilters(newFilters);
-    applyFilters(newFilters, allData);
+    applyFiltersAndSearch(newFilters, searchQuery, allData); // ✅ search bhi saath mein
   };
 
   const resetFilters = () => {
@@ -300,21 +349,13 @@ const Visualization = () => {
     setCurrentPage(1);
   };
 
-  // ── Search ────────────────────────────────────────────────────────────────────
+  // ── Search Handler ────────────────────────────────────────────────────────────
+  // ✅ "PuNaM" type karo — toLowerCase() se case-insensitive match hoga
 
   const handleSearch = (e) => {
-    const q = e.target.value.toLowerCase();
+    const q = e.target.value;
     setSearchQuery(q);
-    const filtered = allData.filter(
-      (f) =>
-        (f.farmer_name || "").toLowerCase().includes(q) ||
-        (f.farmer_id || "").toLowerCase().includes(q) ||
-        (f.village || "").toLowerCase().includes(q)
-    );
-    setData(filtered);
-    generateCharts(filtered);
-    generateStats(filtered);
-    setCurrentPage(1);
+    applyFiltersAndSearch(filters, q, allData); // ✅ active filters bhi maintain rahenge
   };
 
   // ── Edit ──────────────────────────────────────────────────────────────────────
@@ -366,17 +407,6 @@ const Visualization = () => {
     if (searchQuery)      parts.push("search");
     return parts.join("_").replace(/\s+/g, "-").toLowerCase();
   };
-  const projectNames = {
-  "FCF050": "African Bamboo",
-  "FCF053": "Biwal",
-  "FCF052": "Green Intelligence",
-  "FCF48": "Shristi",
-  "FCF048": "Shristi Dhenkenal",
-  "FCF011": "Rangsang",
-  "FCF049": "Gram Vikas",
-  "FCF057": "SOOVA",
-  "FCF047": "Prasari",
-};
 
   // ── Render States ─────────────────────────────────────────────────────────────
 
@@ -514,7 +544,7 @@ const Visualization = () => {
                 <h3>Farmers by District</h3>
                 <span className="chart-count">{districtChart.length} districts</span>
               </div>
-               <div className="district-layout">
+              <div className="district-layout">
                 <div className="district-pie">
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
@@ -554,8 +584,7 @@ const Visualization = () => {
                     </div>
                   ))}
                 </div>
-                </div>
-
+              </div>
             </div>
           </section>
 
@@ -563,9 +592,8 @@ const Visualization = () => {
           <section className="dash-section">
             <SectionHeader icon="🔽" title="Filters" subtitle="Narrow down records by category" />
             <div className="filter-panel">
-             <div className="filter-group">
+              <div className="filter-group">
                 <label className="filter-label">PROJECT</label>
-                
                 <select
                   name="project"
                   value={filters.project}
@@ -573,22 +601,12 @@ const Visualization = () => {
                   className="filter-select"
                 >
                   <option value="">All Projects</option>
-
                   {projects.map((p, i) => (
                     <option key={i} value={p}>
                       {p} - {projectNames[p] || "Unknown Project"}
                     </option>
                   ))}
-                  
                 </select>
-              </div>
-              <div className="filter-group">
-                <label className="filter-label">FROM DATE</label>
-                <input type="date" className="filter-input" />
-              </div>
-              <div className="filter-group">
-                <label className="filter-label">TO DATE</label>
-                <input type="date" className="filter-input" />
               </div>
               <div className="filter-group">
                 <label className="filter-label">STATE</label>
@@ -615,7 +633,7 @@ const Visualization = () => {
                 <span className="search-icon">🔍</span>
                 <input
                   type="text"
-                  placeholder="Search farmer, ID, village..."
+                  placeholder="Search farmer, ID, district..."
                   value={searchQuery}
                   onChange={handleSearch}
                   className="header-search-input"

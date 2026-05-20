@@ -177,60 +177,78 @@
   font-size: 32px; font-weight: 600; line-height: 1; color: var(--lp-amber);
 }
 .lp-stat-unit { font-size: 12px; color: var(--lp-text-secondary); margin-top: 4px; }
-
 /* ─── Filter Bar ─────────────────────────────────────────────────────────── */
 .lp-filter-bar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  background: var(--lp-bg-card); border: 1px solid var(--lp-border);
-  border-radius: var(--lp-radius-md); padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  /* Important */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+
+  background: var(--lp-bg-card);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-md);
+  padding: 12px 16px;
   box-shadow: var(--lp-shadow-card);
+
+  scrollbar-width: thin;
 }
 
-.lp-search-input, .lp-filter-input {
-  background: var(--lp-bg-elevated); border: 1px solid var(--lp-border-light);
-  border-radius: var(--lp-radius-sm); color: var(--lp-text-primary);
-  font-family: var(--lp-font-mono); font-size: 12px;
-  padding: 8px 12px; outline: none;
-  transition: border-color var(--lp-transition), box-shadow var(--lp-transition);
+/* Inputs */
+.lp-search-input,
+.lp-filter-input,
+.lp-select {
+  flex-shrink: 0;
 }
-.lp-search-input { flex: 1; min-width: 200px; }
-.lp-filter-input { min-width: 130px; }
-.lp-filter-sm    { width: 90px; min-width: unset; }
-.lp-search-input:focus, .lp-filter-input:focus {
-  border-color: var(--lp-accent); box-shadow: 0 0 0 3px var(--lp-accent-subtle);
+
+/* Search box dynamic width */
+.lp-search-input {
+  flex: 1;
+  min-width: 220px;
 }
-.lp-search-input::placeholder, .lp-filter-input::placeholder { color: var(--lp-text-muted); }
+
+/* Fixed controls */
+.lp-filter-input {
+  width: 140px;
+}
+
+.lp-filter-sm {
+  width: 90px;
+}
 
 .lp-select {
-  background: var(--lp-bg-elevated); border: 1px solid var(--lp-border-light);
-  border-radius: var(--lp-radius-sm); color: var(--lp-text-primary);
-  font-family: var(--lp-font-mono); font-size: 12px;
-  padding: 8px 12px; outline: none; cursor: pointer;
-  transition: border-color var(--lp-transition); min-width: 130px;
+  width: 140px;
 }
-.lp-select:focus { border-color: var(--lp-accent); }
-.lp-select-sm   { min-width: 140px; }
 
-/* ─── Advanced Filters ───────────────────────────────────────────────────── */
+.lp-select-sm {
+  width: 120px;
+}
+
+/* Advanced Filters */
 .lp-adv-filters {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  background: var(--lp-bg-elevated); border: 1px solid var(--lp-border-light);
-  border-radius: var(--lp-radius-md); padding: 10px 16px;
-}
-.lp-adv-label {
-  font-family: var(--lp-font-mono); font-size: 10px;
-  letter-spacing: 1px; text-transform: uppercase; color: var(--lp-text-muted); white-space: nowrap;
-}
-.lp-adv-sep { color: var(--lp-text-muted); font-size: 13px; }
+  display: flex;
+  align-items: center;
+  gap: 10px;
 
-.lp-sort-control { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.lp-sort-dir-btn {
-  background: var(--lp-bg-card); border: 1px solid var(--lp-border);
-  border-radius: var(--lp-radius-sm); color: var(--lp-text-secondary);
-  font-family: var(--lp-font-mono); font-size: 11px; padding: 6px 12px;
-  cursor: pointer; transition: all var(--lp-transition);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+
+  background: var(--lp-bg-elevated);
+  border: 1px solid var(--lp-border-light);
+  border-radius: var(--lp-radius-md);
+  padding: 10px 16px;
 }
-.lp-sort-dir-btn:hover { border-color: var(--lp-accent); color: var(--lp-accent); }
+
+.lp-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  margin-left: auto;
+  flex-shrink: 0;
+}
 
 /* ─── Map Style Bar ──────────────────────────────────────────────────────── */
 .lp-map-style-bar {
@@ -523,3 +541,125 @@
   .lp-stats-row   { grid-template-columns: 1fr; }
   .lp-header-title{ font-size: 15px; }
 }
+/* ─────────────────────────────────────────────
+   LP OVERVIEW + FILTERS - SAME AS FARMER UI
+───────────────────────────────────────────── */
+
+/* Section */
+.lp-root .dash-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.lp-root .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lp-root .section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lp-root .section-icon {
+  font-size: 22px;
+  width: 40px;
+  height: 40px;
+  background: var(--surface, #ffffff);
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.08));
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.lp-root .section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  margin: 0;
+}
+
+.lp-root .section-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  margin: 2px 0 0;
+}
+
+.lp-root .section-badge {
+  background: var(--green, #16a34a);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* KPI Grid */
+.lp-root .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+/* KPI Card */
+.lp-root .kpi-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 112px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.08));
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.lp-root .kpi-icon-wrap {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--kpi-color, #2563eb) 10%, white);
+  color: var(--kpi-color, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.lp-root .kpi-body {
+  min-width: 0;
+}
+
+.lp-root .kpi-label {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+}
+
+.lp-root .kpi-value {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 800;
+  color:rgb(37, 110, 247);
+  white-space: nowrap;
+}
+
+.lp-root .kpi-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+}
+
