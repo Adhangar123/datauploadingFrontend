@@ -11,16 +11,13 @@ import Visualization from "../pages/Visualization";
 import DocumentUploading from "../pages/DocumentUploading";
 import WeeklyUpdate from "../pages/WeeklyUpdate";
 import LpdataVisualization from "../pages/LpdataVisualization";
+import TreeDataUpload from "../pages/TreeDatauploading";
 
 const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<Dashboard />} />
     <Route path="/Help" element={<Help />} />
     <Route path="/Fileconverter" element={<Fileconverter />} />
-
-
-
-
     {/* Protected Routes */}
     <Route element={<ProtectedRoute />}>
       <Route path="/farmer-data" element={<Farmerdata />} />
@@ -29,9 +26,7 @@ const AppRoutes = () => (
       <Route path="/DocumentUploading" element={<DocumentUploading />} />
       <Route path="/WeeklyUpdate" element={<WeeklyUpdate />} />
       <Route path="/LpdataVisualization" element={<LpdataVisualization />}/>
-
-
-
+      <Route path="/tree-data-upload" element={<TreeDataUpload />}/>
     </Route>
   </Routes>
 );

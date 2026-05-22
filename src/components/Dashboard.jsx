@@ -40,7 +40,7 @@ const Dashboard = () => {
             className="dashboard-card farmer"
             onClick={() => handleCardClick("/farmer-data")}
           >
-            <div className="card-icon">👨‍🌾</div>
+            <div className="card-icon">🌾</div>
             <h2>Farmer Data</h2>
             <p>Upload farmer profiles, validate records, and sync them securely.</p>
           </div>
@@ -52,6 +52,14 @@ const Dashboard = () => {
             <div className="card-icon">🌾</div>
             <h2>Land Parcel Data</h2>
             <p>Upload land parcel boundaries, KML/GeoJSON files, and metadata.</p>
+          </div>
+          <div
+            className="dashboard-card land"
+            onClick={() => handleCardClick("/tree-data-upload")}
+          >
+            <div className="card-icon">🌾</div>
+            <h2>Tree Data</h2>
+            <p> Upload tree plantation data with  CSV file support</p>
           </div>
            <div
             className="dashboard-card cra" 
