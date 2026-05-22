@@ -260,6 +260,41 @@ const Visualization = () => {
     setGps([...new Set(farmers.map((f) => f.blocks).filter(Boolean))]);
   }, []);
 
+  // ── Dependent Dropdown Updater ────────────────────────────────────────────────
+  // ✅ Har filter change ke baad sirf valid options dikhao (cascading behavior)
+
+  const updateDependentDropdowns = useCallback((activeFilters, source) => {
+    // Projects — hamesha full list (kabhi filter nahi hota)
+    setProjects([...new Set(source.map((f) => f.project_code).filter(Boolean))]);
+
+    // Step 1: Project select ke baad → sirf usi project ke states
+    let afterProject = [...source];
+    if (activeFilters.project) {
+      afterProject = afterProject.filter(
+        (x) => (x.project_code || "").toLowerCase() === activeFilters.project.toLowerCase()
+      );
+    }
+    setStates([...new Set(afterProject.map((f) => f.state).filter(Boolean))]);
+
+    // Step 2: Project + State select ke baad → sirf valid districts
+    let afterState = [...afterProject];
+    if (activeFilters.state) {
+      afterState = afterState.filter(
+        (x) => (x.state || "").toLowerCase() === activeFilters.state.toLowerCase()
+      );
+    }
+    setDistricts([...new Set(afterState.map((f) => f.district).filter(Boolean))]);
+
+    // Step 3: Project + State + District select ke baad → sirf valid GPs
+    let afterDistrict = [...afterState];
+    if (activeFilters.district) {
+      afterDistrict = afterDistrict.filter(
+        (x) => (x.district || "").toLowerCase() === activeFilters.district.toLowerCase()
+      );
+    }
+    setGps([...new Set(afterDistrict.map((f) => f.blocks).filter(Boolean))]);
+  }, []);
+
   // ── Load ──────────────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
@@ -312,32 +347,51 @@ const Visualization = () => {
     }
 
     // ── Search Query (ILIKE style — partial match, case-insensitive) ──────────
-    // ✅ Bilkul backend ke ILIKE '%PuNaM%' jaisa kaam karega
     if (query.trim()) {
-      const q = query.trim().toLowerCase(); // "PuNaM" → "punam"
+      const q = query.trim().toLowerCase();
       filtered = filtered.filter((f) =>
-        (f.farmer_name   || "").toLowerCase().includes(q) ||  // ILIKE farmer_name
-        (f.farmer_id     || "").toLowerCase().includes(q) ||  // ILIKE farmer_id
-        (f.district      || "").toLowerCase().includes(q) ||  // ILIKE district
-        (f.state         || "").toLowerCase().includes(q) ||  // ILIKE state
-        (f.blocks        || "").toLowerCase().includes(q) ||  // ILIKE blocks
-        (f.project_code  || "").toLowerCase().includes(q)     // ILIKE project_code
+        (f.farmer_name   || "").toLowerCase().includes(q) ||
+        (f.farmer_id     || "").toLowerCase().includes(q) ||
+        (f.district      || "").toLowerCase().includes(q) ||
+        (f.state         || "").toLowerCase().includes(q) ||
+        (f.blocks        || "").toLowerCase().includes(q) ||
+        (f.project_code  || "").toLowerCase().includes(q)
       );
     }
 
     setData(filtered);
     generateCharts(filtered);
     generateStats(filtered);
+
+    // ✅ Dependent dropdowns update karo filtered data ke basis pe
+    updateDependentDropdowns(activeFilters, source);
+
     setCurrentPage(1);
-  }, [generateCharts, generateStats]);
+  }, [generateCharts, generateStats, updateDependentDropdowns]);
 
   // ── Filter Handler ────────────────────────────────────────────────────────────
+  // ✅ Parent filter change hone pe dependent filters reset ho jaate hain
 
   const handleFilter = (e) => {
     const { name, value } = e.target;
-    const newFilters = { ...filters, [name]: value };
+
+    let newFilters = { ...filters, [name]: value };
+
+    // Project badla → state, district, gp sab reset
+    if (name === "project") {
+      newFilters = { ...newFilters, state: "", district: "", gp: "" };
+    }
+    // State badla → district, gp reset
+    else if (name === "state") {
+      newFilters = { ...newFilters, district: "", gp: "" };
+    }
+    // District badla → gp reset
+    else if (name === "district") {
+      newFilters = { ...newFilters, gp: "" };
+    }
+
     setFilters(newFilters);
-    applyFiltersAndSearch(newFilters, searchQuery, allData); // ✅ search bhi saath mein
+    applyFiltersAndSearch(newFilters, searchQuery, allData);
   };
 
   const resetFilters = () => {
@@ -346,16 +400,16 @@ const Visualization = () => {
     setData(allData);
     generateCharts(allData);
     generateStats(allData);
+    generateDropdowns(allData); // ✅ Reset pe sab dropdowns full restore ho jaayein
     setCurrentPage(1);
   };
 
   // ── Search Handler ────────────────────────────────────────────────────────────
-  // ✅ "PuNaM" type karo — toLowerCase() se case-insensitive match hoga
 
   const handleSearch = (e) => {
     const q = e.target.value;
     setSearchQuery(q);
-    applyFiltersAndSearch(filters, q, allData); // ✅ active filters bhi maintain rahenge
+    applyFiltersAndSearch(filters, q, allData);
   };
 
   // ── Edit ──────────────────────────────────────────────────────────────────────
