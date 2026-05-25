@@ -22,7 +22,7 @@ export const uploadFarmerDocsZip = async (zipFile) => {
   const formData = new FormData();
   formData.append("zipFile", zipFile);
 
-  const { data } = await api.post("/api/v1/farmer-docs/zip-upload", formData, {
+  const { data } = await api.post("/api/v1/farmer-docs/zip-upload-stream", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
