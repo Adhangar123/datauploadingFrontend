@@ -1,6 +1,6 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  "https://datauploadingbackend-13977221722.asia-south2.run.app";
+  "https://datauploading-frontend-h4cu.vercel.app";
 
 // ─────────────────────────────────────────────────────────────
 // uploadDocumentZip
