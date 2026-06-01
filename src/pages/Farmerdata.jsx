@@ -38,6 +38,30 @@ const parseNames = (value) => {
     .filter((n) => n !== "");
 };
 
+const parseDateFlexible = (value) => {
+  if (!value) return null;
+
+  // Excel serial date
+  if (typeof value === "number") {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    return new Date(excelEpoch.getTime() + value * 86400000);
+  }
+
+  const str = value.toString().trim();
+
+  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY
+  const match = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+
+  if (match) {
+    const [, day, month, year] = match;
+    return new Date(`${year}-${month}-${day}`);
+  }
+
+  const parsed = new Date(str);
+
+  return isNaN(parsed.getTime()) ? null : parsed;
+};
+
 /* ---------------- SANITIZER ---------------- */
 const sanitizeRow = (row) => {
   const cleaned = {};
@@ -99,19 +123,21 @@ const farmerIdPattern = /^[A-Za-z0-9-_]+$/;
   }
 
   if (row.onboarding_date) {
-    const date = new Date(row.onboarding_date);
-    if (isNaN(date.getTime())) {
-      errors.push("onboarding_date must be valid date");
-    }
+  const date = parseDateFlexible(row.onboarding_date);
+
+  if (!date) {
+    errors.push("onboarding_date must be valid date");
   }
+}
 
   // ✅ NEW: survey_date validation
   if (row.survey_date) {
-    const date = new Date(row.survey_date);
-    if (isNaN(date.getTime())) {
-      errors.push("survey_date must be valid date");
-    }
+  const date = parseDateFlexible(row.survey_date);
+
+  if (!date) {
+    errors.push("survey_date must be valid date");
   }
+}
 
   // ✅ NEW: gender validation (optional but if provided must be valid)
   const validGenders = ["male", "female", "other"];
@@ -260,11 +286,11 @@ const handleSendToDB = async () => {
     updated_by: userId,
 
     onboarding_date: row.onboarding_date
-      ? new Date(row.onboarding_date)
+      ? parseDateFlexible(row.onboarding_date)
       : null,
 
     survey_date: row.survey_date
-      ? new Date(row.survey_date)
+      ? parseDateFlexible(row.survey_date)
       : null,
 
     farmer_name: row.farmer_name,
