@@ -1,10 +1,10 @@
 import React, { useState, useRef } from "react";
 import { uploadDocumentZip } from "../api/farmerDocsApi";
 import "../style/KmlTodatabase.css";
- 
+
 const REQUIRED_HEADERS = ["farmer_id", "aadhar", "agreement_letter"];
 const BATCH_SIZE = 100;
- 
+
 const ZIP_DOC_TYPE_MAP = {
   aadhar: "aadhar",
   agreement: "agreement_letter",
@@ -12,35 +12,35 @@ const ZIP_DOC_TYPE_MAP = {
   photo: "farmer_photo",
   farmer_photo: "farmer_photo",
 };
- 
+
 const VALID_DOC_FOLDERS = Object.keys(ZIP_DOC_TYPE_MAP);
- 
+
 const getZipFileInfo = (relPath) => {
   const parts = relPath
     .replace(/\\/g, "/")
     .replace(/^\//, "")
     .split("/")
     .filter(Boolean);
- 
+
   if (parts.length < 4) return null;
- 
+
   const rootFolder = parts[0];
   const docTypeIndex = parts.findIndex((part) =>
     VALID_DOC_FOLDERS.includes(part.toLowerCase())
   );
- 
+
   if (docTypeIndex === -1) return null;
- 
+
   const rawDocType = parts[docTypeIndex].toLowerCase();
   const mappedDocType = ZIP_DOC_TYPE_MAP[rawDocType];
   const farmerId = parts[docTypeIndex + 1];
   const fileName = parts[parts.length - 1];
- 
+
   if (!mappedDocType || !farmerId || !fileName) return null;
- 
+
   return { rootFolder, docType: mappedDocType, farmerId, fileName };
 };
- 
+
 const chunkArray = (arr, size) => {
   const chunks = [];
   for (let i = 0; i < arr.length; i += size) {
@@ -48,7 +48,7 @@ const chunkArray = (arr, size) => {
   }
   return chunks;
 };
- 
+
 const DocumentUploading = () => {
   const [zipFile, setZipFile] = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
@@ -61,11 +61,10 @@ const DocumentUploading = () => {
   const [uploadSummary, setUploadSummary] = useState(null);
   const [batchProgress, setBatchProgress] = useState(null);
   const [batchLog, setBatchLog] = useState([]);
-  // ✅ NEW: per-batch XHR network upload percent (0–100)
   const [xhrPercent, setXhrPercent] = useState(0);
- 
+
   const fileInputRef = useRef();
- 
+
   const resetUploadState = () => {
     setCorrectedRows([]);
     setIncorrectRows([]);
@@ -77,24 +76,24 @@ const DocumentUploading = () => {
     setBatchLog([]);
     setXhrPercent(0);
   };
- 
+
   const handleZipSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
- 
+
     if (!file.name.toLowerCase().endsWith(".zip")) {
       alert("Please select a .zip file");
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
- 
+
     setZipFile(file);
     resetUploadState();
   };
- 
+
   const handleReadFile = async () => {
     if (!zipFile) return;
- 
+
     setPreviewing(true);
     setMessage("");
     setDbError("");
@@ -102,45 +101,45 @@ const DocumentUploading = () => {
     setBatchProgress(null);
     setBatchLog([]);
     setZipRootFolder(null);
- 
+
     try {
       const JSZip = (await import("jszip")).default;
       const zip = await JSZip.loadAsync(zipFile);
       const farmerMap = {};
       let detectedRootFolder = null;
- 
+
       for (const [relPath, entry] of Object.entries(zip.files)) {
         if (entry.dir) continue;
- 
+
         const fileInfo = getZipFileInfo(relPath);
         if (!fileInfo) continue;
- 
+
         if (!detectedRootFolder) detectedRootFolder = fileInfo.rootFolder;
- 
+
         if (!farmerMap[fileInfo.farmerId]) {
           farmerMap[fileInfo.farmerId] = { farmer_id: fileInfo.farmerId };
         }
- 
+
         farmerMap[fileInfo.farmerId][fileInfo.docType] = fileInfo.fileName;
       }
- 
+
       setZipRootFolder(detectedRootFolder);
- 
+
       const valid = [];
       const invalid = [];
       const seenIds = new Set();
- 
+
       for (const row of Object.values(farmerMap)) {
         const errors = [];
- 
+
         if (!row.farmer_id) errors.push("farmer_id missing");
         if (!row.aadhar) errors.push("aadhar missing");
         if (!row.agreement_letter) errors.push("agreement_letter missing");
- 
+
         if (row.farmer_id && seenIds.has(row.farmer_id)) {
           errors.push("Duplicate farmer_id");
         }
- 
+
         if (errors.length === 0) {
           valid.push(row);
           seenIds.add(row.farmer_id);
@@ -148,13 +147,13 @@ const DocumentUploading = () => {
           invalid.push({ ...row, __errors: errors });
         }
       }
- 
+
       if (valid.length === 0 && invalid.length === 0) {
         setDbError(
           "No valid files found. Expected: <FolderName>/aadhar/<farmer_id>/<file>"
         );
       }
- 
+
       setCorrectedRows(valid);
       setIncorrectRows(invalid);
     } catch (err) {
@@ -163,45 +162,40 @@ const DocumentUploading = () => {
       setPreviewing(false);
     }
   };
- 
-  const createBatchZipFile = async (sourceZip, batchFarmerIds, batchNumber) => {
-    const JSZip = (await import("jszip")).default;
-    const batchZip = new JSZip();
-    const farmerIdSet = new Set(batchFarmerIds);
- 
-    for (const [relPath, entry] of Object.entries(sourceZip.files)) {
-      if (entry.dir) continue;
- 
-      const fileInfo = getZipFileInfo(relPath);
-      if (!fileInfo || !farmerIdSet.has(fileInfo.farmerId)) continue;
- 
-      const fileBlob = await entry.async("blob");
-      batchZip.file(relPath, fileBlob);
-    }
- 
-    const batchBlob = await batchZip.generateAsync({ type: "blob" });
- 
-    return new File(
-      [batchBlob],
-      `${zipRootFolder || "farmers"}-batch-${batchNumber}.zip`,
-      { type: "application/zip" }
-    );
-  };
- 
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ✅ FIX: createBatchZipFile COMPLETELY REMOVED
+  //
+  // PEHLE KA BUG (SABSE BADA FRONTEND ISSUE):
+  //   for (let batch of batches) {
+  //     const batchZipFile = await createBatchZipFile(sourceZip, batchIds)
+  //     // ↑ Har batch ke liye poori 1GB ZIP dobara decompress + re-compress!
+  //     // 10 batches = 10 × (1GB decompress + compress) = 30+ min sirf ZIP ops
+  //   }
+  //
+  // NEW APPROACH:
+  //   - Frontend sirf ORIGINAL zipFile seedha bhejta hai
+  //   - batch_number aur offset FormData mein bhejta hai
+  //   - Backend khud ZIP se sirf us batch ke farmers ki files nikalta hai
+  //   - Frontend ka kaam: file select → validate → send batch params → done
+  //
+  // Isse frontend ka loop sirf FormData banata hai, koi ZIP operations nahi
+  // ─────────────────────────────────────────────────────────────────────────
+
   const handleSendToDB = async () => {
     if (!zipFile || correctedRows.length === 0) return;
- 
+
     setUploading(true);
     setMessage("");
     setDbError("");
     setUploadSummary(null);
     setBatchLog([]);
     setXhrPercent(0);
- 
+
     const totalFarmers = correctedRows.length;
     const batches = chunkArray(correctedRows, BATCH_SIZE);
     const totalBatches = batches.length;
- 
+
     setBatchProgress({
       zip_folder: zipRootFolder,
       total_farmers: totalFarmers,
@@ -212,70 +206,61 @@ const DocumentUploading = () => {
       succeeded: 0,
       failed: 0,
     });
- 
+
+    const allSuccess = [];
+    const allErrors = [];
+
     try {
-      const JSZip = (await import("jszip")).default;
-      const sourceZip = await JSZip.loadAsync(zipFile);
- 
-      const allSuccess = [];
-      const allErrors = [];
- 
       for (let index = 0; index < batches.length; index++) {
         const batchNumber = index + 1;
-        const batchRows = batches[index];
-        const batchFarmerIds = batchRows.map((row) => row.farmer_id);
- 
-        // Reset XHR percent for each new batch
+        const offset = index * BATCH_SIZE;
+
         setXhrPercent(0);
- 
+
         setBatchProgress((prev) => ({
           ...prev,
           current_batch: batchNumber,
           percent: Math.round(((batchNumber - 1) / totalBatches) * 100),
         }));
- 
-        const batchZipFile = await createBatchZipFile(
-          sourceZip,
-          batchFarmerIds,
-          batchNumber
-        );
- 
+
+        // ✅ FIX: Original ZIP directly bhejo + batch params
+        //    Koi re-compression nahi, koi JSZip operations nahi
         const formData = new FormData();
-        formData.append("zipFile", batchZipFile);
+        formData.append("zipFile", zipFile);            // original file, as-is
         formData.append("batch_number", String(batchNumber));
         formData.append("batch_size", String(BATCH_SIZE));
+        formData.append("offset", String(offset));      // backend yahan se slice karega
         formData.append("total_farmers", String(totalFarmers));
- 
-        // ✅ CHANGED: uploadDocumentZip ab Promise return karta hai
-        //    onUploadProgress → XHR network upload % track karta hai
+
+        // ✅ FIX: uploadDocumentZip ab resolve karta hai ok:false bhi
+        //    Isliye await + check karo — try/catch sirf network errors ke liye
         const res = await uploadDocumentZip(formData, (percent) => {
           setXhrPercent(percent);
         });
- 
-        // ✅ CHANGED: pehle res.ok + res.json() tha
-        //    ab res.data directly available hai — res.json() nahi karni
+
+        // ✅ FIX: res.ok check ab sahi kaam karta hai
         if (!res.ok) {
           throw new Error(
-            res.data?.message || `Batch ${batchNumber} failed: ${res.status}`
+            res.data?.message || `Batch ${batchNumber} failed with status ${res.status}`
           );
         }
- 
+
         const data = res.data;
- 
+
         allSuccess.push(...(data.success || []));
         allErrors.push(...(data.errors || []));
- 
+
         setBatchLog((prev) => [
           {
             batch: batchNumber,
             succeeded: data.succeeded || 0,
             failed: data.failed || 0,
             errors: data.errors || [],
-            farmer_ids: data.farmer_ids || batchFarmerIds,
+            farmer_ids: data.farmer_ids || [],
           },
           ...prev,
         ]);
- 
+
         setBatchProgress((prev) => ({
           ...prev,
           current_batch: batchNumber,
@@ -284,7 +269,7 @@ const DocumentUploading = () => {
           failed: allErrors.length,
         }));
       }
- 
+
       const finalSummary = {
         message: "ZIP upload complete",
         zip_folder: zipRootFolder,
@@ -296,7 +281,7 @@ const DocumentUploading = () => {
         success: allSuccess,
         errors: allErrors,
       };
- 
+
       setUploadSummary(finalSummary);
       setMessage("ZIP upload complete");
     } catch (err) {
@@ -307,68 +292,69 @@ const DocumentUploading = () => {
       setXhrPercent(0);
     }
   };
- 
+
   const handleReset = () => {
     setZipFile(null);
     resetUploadState();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
- 
+
   const handleApprove = (index) => {
     const row = incorrectRows[index];
     const errors = [];
- 
+
     if (!row.farmer_id) errors.push("farmer_id missing");
     if (!row.aadhar) errors.push("aadhar missing");
     if (!row.agreement_letter) errors.push("agreement_letter missing");
- 
+
     if (correctedRows.some((item) => item.farmer_id === row.farmer_id)) {
       errors.push("Duplicate farmer_id");
     }
- 
+
     if (errors.length > 0) {
       alert(errors.join("\n"));
       return;
     }
- 
+
     const { __errors, ...cleanRow } = row;
     setCorrectedRows([...correctedRows, cleanRow]);
     setIncorrectRows(incorrectRows.filter((_, i) => i !== index));
   };
- 
+
   const plannedBatches =
     correctedRows.length > 0 ? Math.ceil(correctedRows.length / BATCH_SIZE) : 0;
- 
+
   const overallPercent = batchProgress?.percent ?? 0;
- 
+
   return (
     <div className="kml-upload-container">
       <h2>Document Upload (.zip file only)</h2>
- 
+
       <input
         type="file"
         accept=".zip"
         onChange={handleZipSelect}
         ref={fileInputRef}
       />
- 
+
       {zipFile && (
         <span style={{ fontSize: 13, color: "#475569", marginLeft: 8 }}>
           {zipFile.name} ({(zipFile.size / 1024 / 1024).toFixed(2)} MB)
           {zipRootFolder && (
             <span style={{ marginLeft: 6, color: "#64748b" }}>
-              {" "}Folder: <strong>{zipRootFolder}</strong>
+              {" "}
+              Folder: <strong>{zipRootFolder}</strong>
             </span>
           )}
         </span>
       )}
- 
+
       <button onClick={handleReadFile} disabled={!zipFile || previewing}>
         {previewing ? "Reading..." : "1. Read & Validate"}
       </button>
- 
+
       <button onClick={handleReset}>Reset</button>
- 
+
       {/* Batch plan */}
       {correctedRows.length > 0 && !uploading && (
         <div
@@ -387,9 +373,12 @@ const DocumentUploading = () => {
             Data will be sent in {plannedBatches} batch
             {plannedBatches > 1 ? "es" : ""} of max {BATCH_SIZE} farmers.
           </p>
+          <p style={{ color: "#64748b", marginTop: 4 }}>
+            ✓ Original ZIP file will be sent directly — no re-compression needed
+          </p>
         </div>
       )}
- 
+
       {/* Upload progress */}
       {uploading && batchProgress && (
         <div
@@ -401,7 +390,7 @@ const DocumentUploading = () => {
             background: "#f8fafc",
           }}
         >
-          {/* Batch level progress */}
+          {/* Overall batch progress */}
           <div
             style={{
               display: "flex",
@@ -417,7 +406,7 @@ const DocumentUploading = () => {
             </span>
             <span style={{ fontWeight: 600 }}>{overallPercent}%</span>
           </div>
- 
+
           <div
             style={{
               height: 8,
@@ -437,8 +426,8 @@ const DocumentUploading = () => {
               }}
             />
           </div>
- 
-          {/* ✅ NEW: XHR network upload progress for current batch */}
+
+          {/* Per-batch XHR network progress */}
           <div
             style={{
               display: "flex",
@@ -448,12 +437,12 @@ const DocumentUploading = () => {
               color: "#64748b",
             }}
           >
-            <span>Current batch uploading...</span>
+            <span>Current batch uploading to server...</span>
             <span style={{ fontWeight: 600, color: "#f97316" }}>
               {xhrPercent}%
             </span>
           </div>
- 
+
           <div
             style={{
               height: 5,
@@ -473,7 +462,7 @@ const DocumentUploading = () => {
               }}
             />
           </div>
- 
+
           <div style={{ display: "flex", gap: 20, fontSize: 13 }}>
             <span>Total: {batchProgress.total_farmers}</span>
             <span style={{ color: "#16a34a" }}>
@@ -487,7 +476,7 @@ const DocumentUploading = () => {
               Failed: {batchProgress.failed}
             </span>
           </div>
- 
+
           {batchLog.length > 0 && (
             <div
               style={{
@@ -522,12 +511,12 @@ const DocumentUploading = () => {
           )}
         </div>
       )}
- 
+
       <div className="stack-container">
         {/* Valid data table */}
         <div className="box green">
           <h3>Valid Data ({correctedRows.length})</h3>
- 
+
           <div className="table-scroll">
             <table>
               <thead>
@@ -550,7 +539,7 @@ const DocumentUploading = () => {
               </tbody>
             </table>
           </div>
- 
+
           <button
             className="send-db-btn"
             onClick={handleSendToDB}
@@ -560,10 +549,10 @@ const DocumentUploading = () => {
               ? `Uploading... ${batchProgress ? `(${overallPercent}%)` : ""}`
               : "2. Send to Database"}
           </button>
- 
+
           {message && <p style={{ color: "green" }}>{message}</p>}
           {dbError && <p style={{ color: "red" }}>{dbError}</p>}
- 
+
           {uploadSummary && !uploading && (
             <div
               style={{
@@ -593,7 +582,7 @@ const DocumentUploading = () => {
               >
                 Failed: {uploadSummary.failed}
               </p>
- 
+
               {uploadSummary.errors?.length > 0 && (
                 <div style={{ marginTop: 8 }}>
                   <p
@@ -619,11 +608,11 @@ const DocumentUploading = () => {
             </div>
           )}
         </div>
- 
+
         {/* Incorrect data table */}
         <div className="box red">
           <h3>Incorrect Data ({incorrectRows.length})</h3>
- 
+
           <div className="table-scroll">
             <table>
               <thead>
@@ -654,7 +643,7 @@ const DocumentUploading = () => {
                         />
                       </td>
                     ))}
- 
+
                     <td>
                       <input
                         value={row.farmer_photo ?? ""}
@@ -669,11 +658,11 @@ const DocumentUploading = () => {
                         }}
                       />
                     </td>
- 
+
                     <td style={{ color: "red" }}>
                       {row.__errors?.join(", ")}
                     </td>
- 
+
                     <td>
                       <button onClick={() => handleApprove(index)}>
                         Approve
@@ -689,5 +678,5 @@ const DocumentUploading = () => {
     </div>
   );
 };
- 
+
 export default DocumentUploading;
