@@ -10,44 +10,15 @@ const ALLOWED_FIELDS = [
   "project_code",
   "species_name",
   "tree_count",
-  "mode_of_data",
-  "plantation_and_monitoring_date",
+  "plantation_type",
+  "plantation_year",
+  "surviving_plants",
+  "actual_planted",
+  "mortality",
 ];
 
 /* ---------------- REQUIRED HEADERS ---------------- */
 const REQUIRED_HEADERS = ["parcel_id", "species_name", "tree_count"];
-
-/* ---------------- FLEXIBLE DATE PARSER ---------------- */
-// FIX #1: Moved OUTSIDE validateRow so it can be reused in handleSendToDB
-const parseFlexibleDate = (value) => {
-  if (!value) return null;
-
-  // Already a numeric timestamp
-  if (!isNaN(value) && String(value).length >= 10) {
-    const timestampDate = new Date(Number(value));
-    if (!isNaN(timestampDate.getTime())) return timestampDate;
-  }
-
-  let str = value.toString().trim();
-
-  // Replace dots with slash
-  str = str.replace(/\./g, "/");
-
-  // DD-MM-YYYY or DD/MM/YYYY
-  if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(str)) {
-    const [day, month, year] = str.split(/[-/]/);
-    str = `${year}-${month}-${day}`;
-  }
-  // MM/DD/YYYY
-  else if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
-    const [month, day, year] = str.split("/");
-    str = `${year}-${month}-${day}`;
-  }
-  // YYYY-MM-DD → already fine, no change needed
-
-  const date = new Date(str);
-  return isNaN(date.getTime()) ? null : date;
-};
 
 /* ---------------- SANITIZER ---------------- */
 const sanitizeRow = (row) => {
@@ -72,8 +43,12 @@ const sanitizeRow = (row) => {
       return;
     }
 
-    if (key === "tree_count") {
-      cleaned[key] = Number(value);
+    // Numeric fields
+    if (
+      ["tree_count", "plantation_year", "surviving_plants", "actual_planted", "mortality"].includes(key)
+    ) {
+      const num = Number(value);
+      cleaned[key] = isNaN(num) ? null : num;
       return;
     }
 
@@ -92,20 +67,46 @@ const validateRow = (row) => {
 
   if (row.tree_count === null || row.tree_count === undefined || row.tree_count === "") {
     errors.push("tree_count is required");
-  } else if (Number.isNaN(Number(row.tree_count)) || Number(row.tree_count) <= 0) {
+  } else if (isNaN(Number(row.tree_count)) || Number(row.tree_count) <= 0) {
     errors.push("tree_count must be a valid positive number");
   }
 
-  // FIX #2: Actually validate the date field using parseFlexibleDate
   if (
-    row.plantation_and_monitoring_date !== null &&
-    row.plantation_and_monitoring_date !== undefined &&
-    row.plantation_and_monitoring_date !== ""
+    row.plantation_year !== null &&
+    row.plantation_year !== undefined &&
+    row.plantation_year !== ""
   ) {
-    const parsed = parseFlexibleDate(row.plantation_and_monitoring_date);
-    if (!parsed) {
-      errors.push("plantation_and_monitoring_date is not a valid date");
+    const yr = Number(row.plantation_year);
+    if (isNaN(yr) || yr < 1900 || yr > 2100) {
+      errors.push("plantation_year must be a valid year (1900–2100)");
     }
+  }
+
+  if (
+    row.surviving_plants !== null &&
+    row.surviving_plants !== undefined &&
+    row.surviving_plants !== "" &&
+    isNaN(Number(row.surviving_plants))
+  ) {
+    errors.push("surviving_plants must be a valid number");
+  }
+
+  if (
+    row.actual_planted !== null &&
+    row.actual_planted !== undefined &&
+    row.actual_planted !== "" &&
+    isNaN(Number(row.actual_planted))
+  ) {
+    errors.push("actual_planted must be a valid number");
+  }
+
+  if (
+    row.mortality !== null &&
+    row.mortality !== undefined &&
+    row.mortality !== "" &&
+    isNaN(Number(row.mortality))
+  ) {
+    errors.push("mortality must be a valid number");
   }
 
   return { isValid: errors.length === 0, errors };
@@ -118,48 +119,66 @@ const normalizeFieldName = (name) => {
   const lower = name.trim().toLowerCase();
 
   const mapping = {
-    parcelid: "parcel_id",
-    "parcel id": "parcel_id",
-    parcel_id: "parcel_id",
+    // parcel_id
+    parcelid:       "parcel_id",
+    "parcel id":    "parcel_id",
+    parcel_id:      "parcel_id",
 
-    projectcode: "project_code",
+    // project_code
+    projectcode:    "project_code",
     "project code": "project_code",
-    project_code: "project_code",
+    project_code:   "project_code",
 
-    speciesname: "species_name",
+    // species_name
+    speciesname:    "species_name",
     "species name": "species_name",
-    species_name: "species_name",
+    species_name:   "species_name",
 
-    treecount: "tree_count",
-    "tree count": "tree_count",
-    tree_count: "tree_count",
+    // tree_count
+    treecount:      "tree_count",
+    "tree count":   "tree_count",
+    tree_count:     "tree_count",
 
-    modeofdata: "mode_of_data",
-    "mode of data": "mode_of_data",
-    mode_of_data: "mode_of_data",
+    // plantation_type
+    plantationtype:   "plantation_type",
+    "plantation type": "plantation_type",
+    plantation_type:   "plantation_type",
 
-    plantationandmonitoringdate: "plantation_and_monitoring_date",
-    "plantation and monitoring date": "plantation_and_monitoring_date",
-    "plantation monitoring date": "plantation_and_monitoring_date",
-    plantation_and_monitoring_date: "plantation_and_monitoring_date",
+    // plantation_year
+    plantationyear:   "plantation_year",
+    "plantation year": "plantation_year",
+    plantation_year:   "plantation_year",
+
+    // surviving_plants
+    survivingplants:    "surviving_plants",
+    "surviving plants": "surviving_plants",
+    surviving_plants:   "surviving_plants",
+
+    // actual_planted
+    actualplanted:    "actual_planted",
+    "actual planted": "actual_planted",
+    actual_planted:   "actual_planted",
+
+    // mortality
+    mortality: "mortality",
   };
 
   return mapping[lower] || lower;
 };
 
+/* ---------------- COMPONENT ---------------- */
 const TreeDataUpload = () => {
-  const [file, setFile] = useState(null);
+  const [file, setFile]               = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
   const [incorrectRows, setIncorrectRows] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [dbError, setDbError] = useState("");
-  const fileInputRef = useRef(null);
+  const [uploading, setUploading]     = useState(false);
+  const [message, setMessage]         = useState("");
+  const [dbError, setDbError]         = useState("");
+  const fileInputRef                  = useRef(null);
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (!selected) return;
-
     setFile(selected);
     setCorrectedRows([]);
     setIncorrectRows([]);
@@ -174,37 +193,28 @@ const TreeDataUpload = () => {
     setMessage("");
     setDbError("");
     setUploading(false);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleReadFile = async () => {
-    if (!file) {
-      setMessage("Please select file");
-      return;
-    }
+    if (!file) { setMessage("Please select file"); return; }
 
     try {
       let rawRows = [];
 
       if (file.name.toLowerCase().endsWith(".csv")) {
-        const text = await file.text();
-
+        const text   = await file.text();
         const result = Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-          transformHeader: normalizeFieldName,
+          header:           true,
+          skipEmptyLines:   true,
+          transformHeader:  normalizeFieldName,
         });
-
         rawRows = result.data;
       } else {
-        const buffer = await file.arrayBuffer();
+        const buffer   = await file.arrayBuffer();
         const workbook = XLSX.read(buffer, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-
-        const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+        const json     = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
         rawRows = json.map((row) => {
           const normalized = {};
@@ -215,7 +225,7 @@ const TreeDataUpload = () => {
         });
       }
 
-      const valid = [];
+      const valid   = [];
       const invalid = [];
 
       rawRows.forEach((row) => {
@@ -224,8 +234,8 @@ const TreeDataUpload = () => {
           filtered[field] = row[field] ?? null;
         });
 
-        filtered = sanitizeRow(filtered);
-        const check = validateRow(filtered);
+        filtered     = sanitizeRow(filtered);
+        const check  = validateRow(filtered);
 
         if (check.isValid) {
           valid.push(filtered);
@@ -249,29 +259,27 @@ const TreeDataUpload = () => {
     setDbError("");
     setMessage("Uploading...");
 
-    const user = JSON.parse(localStorage.getItem("user"));
+    const user   = JSON.parse(localStorage.getItem("user"));
     const userId = user?.user_id || user?.id;
 
-    // FIX #3: Use parseFlexibleDate instead of plain new Date() for correct date parsing
     const cleanedData = correctedRows.map((row) => ({
-      parcel_id: row.parcel_id,
-      project_code: row.project_code || null,
-      species_name: row.species_name,
-      tree_count: Number(row.tree_count),
-      mode_of_data: row.mode_of_data || null,
-      plantation_and_monitoring_date: row.plantation_and_monitoring_date
-        ? parseFlexibleDate(row.plantation_and_monitoring_date)
-        : null,
-      uploaded_by: userId || "system",
+      parcel_id:        row.parcel_id,
+      project_code:     row.project_code     || null,
+      species_name:     row.species_name,
+      tree_count:       Number(row.tree_count),
+      plantation_type:  row.plantation_type  || null,
+      plantation_year:  row.plantation_year  ? Number(row.plantation_year)  : null,
+      uploaded_by:      userId               || "system",
+      surviving_plants: row.surviving_plants ? Number(row.surviving_plants) : null,
+      actual_planted:   row.actual_planted   ? Number(row.actual_planted)   : null,
+      mortality:        row.mortality        ? Number(row.mortality)        : null,
     }));
 
     try {
       const response = await uploadTreeData(cleanedData);
-
       setMessage(
         `Successfully uploaded! Processed: ${response?.processed ?? cleanedData.length}, Failed: ${response?.failed ?? 0}`
       );
-
       if (response?.errors?.length) {
         setDbError(response.errors.map((e) => e.message).join(", "));
       }
@@ -283,7 +291,6 @@ const TreeDataUpload = () => {
     }
   };
 
-  // FIX #4: Inline edit handler now re-runs validation and updates __errors live
   const handleIncorrectRowChange = (index, column, value) => {
     const updated = incorrectRows.map((row, i) => {
       if (i !== index) return row;
@@ -293,7 +300,7 @@ const TreeDataUpload = () => {
       delete rowWithoutErrors.__errors;
 
       const cleaned = sanitizeRow(rowWithoutErrors);
-      const check = validateRow(cleaned);
+      const check   = validateRow(cleaned);
 
       return { ...cleaned, __errors: check.errors };
     });
@@ -307,7 +314,7 @@ const TreeDataUpload = () => {
     delete rowWithoutErrors.__errors;
 
     const cleaned = sanitizeRow(rowWithoutErrors);
-    const check = validateRow(cleaned);
+    const check   = validateRow(cleaned);
 
     if (!check.isValid) {
       alert("Still invalid:\n" + check.errors.join("\n"));
@@ -331,33 +338,29 @@ const TreeDataUpload = () => {
         ref={fileInputRef}
       />
 
-      <button onClick={handleReadFile} disabled={!file}>
-        Read & Validate
-      </button>
-
+      <button onClick={handleReadFile} disabled={!file}>Read & Validate</button>
       <button onClick={handleReset}>Reset</button>
 
       <div className="stack-container">
+        {/* ---------- VALID TABLE ---------- */}
         <div className="box green">
           <h3>Valid Data</h3>
-
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  {columns.map((column) => (
-                    <th key={column}>
-                      {REQUIRED_HEADERS.includes(column) ? `${column} *` : column}
+                  {columns.map((col) => (
+                    <th key={col}>
+                      {REQUIRED_HEADERS.includes(col) ? `${col} *` : col}
                     </th>
                   ))}
                 </tr>
               </thead>
-
               <tbody>
-                {correctedRows.map((row, index) => (
-                  <tr key={index}>
-                    {columns.map((column) => (
-                      <td key={column}>{row[column] ?? ""}</td>
+                {correctedRows.map((row, i) => (
+                  <tr key={i}>
+                    {columns.map((col) => (
+                      <td key={col}>{row[col] ?? ""}</td>
                     ))}
                   </tr>
                 ))}
@@ -377,46 +380,40 @@ const TreeDataUpload = () => {
           {dbError && <p style={{ color: "red" }}>{dbError}</p>}
         </div>
 
+        {/* ---------- INVALID TABLE ---------- */}
         <div className="box red">
           <h3>Incorrect Data</h3>
-
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  {columns.map((column) => (
-                    <th key={column}>
-                      {REQUIRED_HEADERS.includes(column) ? `${column} *` : column}
+                  {columns.map((col) => (
+                    <th key={col}>
+                      {REQUIRED_HEADERS.includes(col) ? `${col} *` : col}
                     </th>
                   ))}
                   <th>Reason</th>
                   <th>Action</th>
                 </tr>
               </thead>
-
               <tbody>
-                {incorrectRows.map((row, index) => (
-                  <tr key={index}>
-                    {columns.map((column) => (
-                      <td key={column}>
-                        {/* FIX #4: Uses extracted handler with live re-validation */}
+                {incorrectRows.map((row, i) => (
+                  <tr key={i}>
+                    {columns.map((col) => (
+                      <td key={col}>
                         <input
-                          value={row[column] ?? ""}
+                          value={row[col] ?? ""}
                           onChange={(e) =>
-                            handleIncorrectRowChange(index, column, e.target.value)
+                            handleIncorrectRowChange(i, col, e.target.value)
                           }
                         />
                       </td>
                     ))}
-
                     <td style={{ color: "red", fontSize: "12px" }}>
                       {row.__errors?.join(", ")}
                     </td>
-
                     <td>
-                      <button onClick={() => handleApproveRow(index)}>
-                        Approve
-                      </button>
+                      <button onClick={() => handleApproveRow(i)}>Approve</button>
                     </td>
                   </tr>
                 ))}

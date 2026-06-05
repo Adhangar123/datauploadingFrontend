@@ -6,40 +6,31 @@ const API_BASE_URL =
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
-
   return {
     "Content-Type": "application/json",
-    ...(token && {
-      Authorization: `Bearer ${token}`,
-    }),
+    ...(token && { Authorization: `Bearer ${token}` }),
   };
 };
 
 /* ---------------- UPLOAD TREE DATA ---------------- */
 export const uploadTreeData = async (data) => {
-  // Convert date into timestamp (milliseconds)
   const formattedData = data.map((item) => ({
-    parcel_id: item.parcel_id,
-    project_code: item.project_code || null,
-    species_name: item.species_name,
-    tree_count: Number(item.tree_count),
-    mode_of_data: item.mode_of_data || null,
-
-    // Convert to timestamp like curl example
-    plantation_and_monitoring_date:
-      item.plantation_and_monitoring_date
-        ? new Date(item.plantation_and_monitoring_date).getTime()
-        : null,
-
-    uploaded_by: item.uploaded_by || "system",
+    parcel_id:        item.parcel_id,
+    project_code:     item.project_code     || null,
+    species_name:     item.species_name,
+    tree_count:       Number(item.tree_count),
+    plantation_type:  item.plantation_type  || null,
+    plantation_year:  item.plantation_year  ? Number(item.plantation_year) : null,
+    uploaded_by:      item.uploaded_by      || "system",
+    surviving_plants: item.surviving_plants ? Number(item.surviving_plants) : null,
+    actual_planted:   item.actual_planted   ? Number(item.actual_planted)   : null,
+    mortality:        item.mortality        ? Number(item.mortality)        : null,
   }));
 
   const response = await axios.post(
     `${API_BASE_URL}/tree-data`,
     formattedData,
-    {
-      headers: getAuthHeaders(),
-    }
+    { headers: getAuthHeaders() }
   );
 
   return response.data;
@@ -48,20 +39,23 @@ export const uploadTreeData = async (data) => {
 /* ---------------- UPDATE TREE DATA ---------------- */
 export const updateTreeData = async (id, data) => {
   const formattedData = {
-    ...data,
-
-    plantation_and_monitoring_date:
-      data.plantation_and_monitoring_date
-        ? new Date(data.plantation_and_monitoring_date).getTime()
-        : null,
+    parcel_id:        data.parcel_id        || null,
+    project_code:     data.project_code     || null,
+    species_name:     data.species_name     || null,
+    tree_count:       data.tree_count       ? Number(data.tree_count)       : null,
+    plantation_type:  data.plantation_type  || null,
+    plantation_year:  data.plantation_year  ? Number(data.plantation_year)  : null,
+    uploaded_by:      data.uploaded_by      || null,
+    is_active:        data.is_active        ?? null,
+    surviving_plants: data.surviving_plants ? Number(data.surviving_plants) : null,
+    actual_planted:   data.actual_planted   ? Number(data.actual_planted)   : null,
+    mortality:        data.mortality        ? Number(data.mortality)        : null,
   };
 
   const response = await axios.put(
     `${API_BASE_URL}/tree-data/${id}`,
     formattedData,
-    {
-      headers: getAuthHeaders(),
-    }
+    { headers: getAuthHeaders() }
   );
 
   return response.data;
