@@ -9,7 +9,6 @@ const ALLOWED_FIELDS = [
   "parcel_id",
   "project_code",
   "species_name",
-  "tree_count",
   "plantation_type",
   "plantation_year",
   "surviving_plants",
@@ -18,7 +17,7 @@ const ALLOWED_FIELDS = [
 ];
 
 /* ---------------- REQUIRED HEADERS ---------------- */
-const REQUIRED_HEADERS = ["parcel_id", "species_name", "tree_count"];
+const REQUIRED_HEADERS = ["parcel_id", "species_name"];
 
 /* ---------------- SANITIZER ---------------- */
 const sanitizeRow = (row) => {
@@ -45,7 +44,7 @@ const sanitizeRow = (row) => {
 
     // Numeric fields
     if (
-      ["tree_count", "plantation_year", "surviving_plants", "actual_planted", "mortality"].includes(key)
+      ["plantation_year", "surviving_plants", "actual_planted", "mortality"].includes(key)
     ) {
       const num = Number(value);
       cleaned[key] = isNaN(num) ? null : num;
@@ -64,12 +63,6 @@ const validateRow = (row) => {
 
   if (!row.parcel_id) errors.push("parcel_id is required");
   if (!row.species_name) errors.push("species_name is required");
-
-  if (row.tree_count === null || row.tree_count === undefined || row.tree_count === "") {
-    errors.push("tree_count is required");
-  } else if (isNaN(Number(row.tree_count)) || Number(row.tree_count) <= 0) {
-    errors.push("tree_count must be a valid positive number");
-  }
 
   if (
     row.plantation_year !== null &&
@@ -133,11 +126,6 @@ const normalizeFieldName = (name) => {
     speciesname:    "species_name",
     "species name": "species_name",
     species_name:   "species_name",
-
-    // tree_count
-    treecount:      "tree_count",
-    "tree count":   "tree_count",
-    tree_count:     "tree_count",
 
     // plantation_type
     plantationtype:   "plantation_type",
@@ -266,7 +254,6 @@ const TreeDataUpload = () => {
       parcel_id:        row.parcel_id,
       project_code:     row.project_code     || null,
       species_name:     row.species_name,
-      tree_count:       Number(row.tree_count),
       plantation_type:  row.plantation_type  || null,
       plantation_year:  row.plantation_year  ? Number(row.plantation_year)  : null,
       uploaded_by:      userId               || "system",
