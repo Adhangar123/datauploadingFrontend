@@ -7,14 +7,15 @@ import "../style/KmlTodatabase.css";
 // ─────────────────────────────────────────────
 
 const REQUIRED_HEADERS = ["farmer_id", "aadhar", "agreement_letter"];
-const BATCH_SIZE       = 2;
+
+const BATCH_SIZE = 2;
 
 const ZIP_DOC_TYPE_MAP = {
-  aadhar:           "aadhar",
-  agreement:        "agreement_letter",
+  aadhar: "aadhar",
+  agreement: "agreement_letter",
   agreement_letter: "agreement_letter",
-  photo:            "farmer_photo",
-  farmer_photo:     "farmer_photo",
+  photo: "farmer_photo",
+  farmer_photo: "farmer_photo",
 };
 
 const VALID_DOC_FOLDERS = Object.keys(ZIP_DOC_TYPE_MAP);
@@ -32,17 +33,17 @@ const getZipFileInfo = (relPath) => {
 
   if (parts.length < 4) return null;
 
-  const rootFolder    = parts[0];
-  const docTypeIndex  = parts.findIndex((part) =>
+  const rootFolder = parts[0];
+  const docTypeIndex = parts.findIndex((part) =>
     VALID_DOC_FOLDERS.includes(part.toLowerCase())
   );
 
   if (docTypeIndex === -1) return null;
 
-  const rawDocType    = parts[docTypeIndex].toLowerCase();
+  const rawDocType = parts[docTypeIndex].toLowerCase();
   const mappedDocType = ZIP_DOC_TYPE_MAP[rawDocType];
-  const farmerId      = parts[docTypeIndex + 1];
-  const fileName      = parts[parts.length - 1];
+  const farmerId = parts[docTypeIndex + 1];
+  const fileName = parts[parts.length - 1];
 
   if (!mappedDocType || !farmerId || !fileName) return null;
 
@@ -87,6 +88,7 @@ const DocumentUploading = () => {
   const skipCurrentRef      = useRef(false);
   const fileInputRef        = useRef();
   const zipInstanceRef      = useRef(null);
+  // ✅ Structure: { [farmerId]: { [docType]: [ { relPath, entry, fileName }, ... ] } }
   const farmerZipEntriesRef = useRef({});
   const abortControllerRef  = useRef(null);
 
@@ -146,7 +148,9 @@ const DocumentUploading = () => {
 
       zipInstanceRef.current = zip;
 
+      // ✅ farmerMap: { farmerId: { farmer_id, aadhar: [file1, file2], agreement_letter: [...], farmer_photo: [...] } }
       const farmerMap        = {};
+      // ✅ farmerZipEntries: { farmerId: { docType: [ {relPath, entry, fileName}, ... ] } }
       const farmerZipEntries = {};
       let detectedRootFolder = null;
 
@@ -158,20 +162,24 @@ const DocumentUploading = () => {
 
         if (!detectedRootFolder) detectedRootFolder = fileInfo.rootFolder;
 
+        // ── farmerMap entry ──────────────────────────────────────────────
         if (!farmerMap[fileInfo.farmerId]) {
           farmerMap[fileInfo.farmerId] = { farmer_id: fileInfo.farmerId };
         }
+        // ✅ Push into array (multiple files per docType supported)
         if (!farmerMap[fileInfo.farmerId][fileInfo.docType]) {
           farmerMap[fileInfo.farmerId][fileInfo.docType] = [];
         }
         farmerMap[fileInfo.farmerId][fileInfo.docType].push(fileInfo.fileName);
 
+        // ── farmerZipEntries ─────────────────────────────────────────────
         if (!farmerZipEntries[fileInfo.farmerId]) {
           farmerZipEntries[fileInfo.farmerId] = {};
         }
         if (!farmerZipEntries[fileInfo.farmerId][fileInfo.docType]) {
           farmerZipEntries[fileInfo.farmerId][fileInfo.docType] = [];
         }
+        // ✅ Array mein push karo
         farmerZipEntries[fileInfo.farmerId][fileInfo.docType].push({
           relPath:  fileInfo.relPath,
           entry,
@@ -189,9 +197,9 @@ const DocumentUploading = () => {
       for (const row of Object.values(farmerMap)) {
         const errors = [];
 
-        if (!row.farmer_id)                errors.push("farmer_id missing");
-        if (!row.aadhar?.length)           errors.push("aadhar missing");
-        if (!row.agreement_letter?.length) errors.push("agreement_letter missing");
+        if (!row.farmer_id)                           errors.push("farmer_id missing");
+        if (!row.aadhar?.length)                      errors.push("aadhar missing");
+        if (!row.agreement_letter?.length)            errors.push("agreement_letter missing");
         if (row.farmer_id && seenIds.has(row.farmer_id)) errors.push("Duplicate farmer_id");
 
         if (errors.length === 0) {
@@ -213,6 +221,42 @@ const DocumentUploading = () => {
     } finally {
       setPreviewing(false);
     }
+  };
+
+  // ── Build mini ZIP ─────────────────────────────────────────────────────
+  // ✅ Ab sab docTypes ke SAARE files include honge (array iterate)
+  const buildMiniZipForFarmers = async (farmerIds, batchNumber) => {
+    const JSZip   = (await import("jszip")).default;
+    const miniZip = new JSZip();
+    const farmerEntries = farmerZipEntriesRef.current;
+
+    for (const farmerId of farmerIds) {
+      const docs = farmerEntries[farmerId] || {};
+
+      for (const docType of ["aadhar", "agreement_letter", "farmer_photo"]) {
+        const docFiles = docs[docType]; // ✅ array
+        if (!docFiles?.length) continue;
+
+        // ✅ Ek ek file ko mini ZIP mein daalo
+        for (const doc of docFiles) {
+          if (!doc?.entry) continue;
+          const buffer = await doc.entry.async("arraybuffer");
+          miniZip.file(doc.relPath, buffer);
+        }
+      }
+    }
+
+    const blob = await miniZip.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 },
+    });
+
+    return new File(
+      [blob],
+      `${zipRootFolder || "farmer-docs"}-batch-${batchNumber}.zip`,
+      { type: "application/zip" }
+    );
   };
 
   // ── Wait while paused ──────────────────────────────────────────────────
@@ -296,7 +340,7 @@ const DocumentUploading = () => {
         }
 
         const clientBatchNumber = batchIndex + 1;
-        const batchRows         = correctedRows.slice(
+        const batchRows      = correctedRows.slice(
           batchIndex * BATCH_SIZE,
           batchIndex * BATCH_SIZE + BATCH_SIZE
         );
@@ -305,8 +349,8 @@ const DocumentUploading = () => {
         setBatchStatusMap((prev) => ({
           ...prev,
           [clientBatchNumber]: {
-            status:    BATCH_STATUS.UPLOADING,
-            reason:    "",
+            status: BATCH_STATUS.UPLOADING,
+            reason: "",
             farmerIds: batchFarmerIds,
           },
         }));
@@ -320,63 +364,12 @@ const DocumentUploading = () => {
           percent: Math.round((batchIndex / totalBatches) * 100),
         }));
 
-        // ── Direct FormData build — NO ZIP ────────────────────────────
-        let formData;
+        // ── Build mini ZIP ─────────────────────────────────────────────
+        let miniZipFile;
         try {
-          formData = new FormData();
-          const farmerEntries = farmerZipEntriesRef.current;
-          const fileCountMeta = [];
-
-          for (const farmerId of batchFarmerIds) {
-            const docs = farmerEntries[farmerId] || {};
-
-            const aadharFiles    = docs.aadhar           || [];
-            const agreementFiles = docs.agreement_letter || [];
-            const photoFiles     = docs.farmer_photo     || [];
-
-            for (const doc of aadharFiles) {
-              if (!doc?.entry) continue;
-              const buffer = await doc.entry.async("arraybuffer");
-              formData.append(
-                "aadhar",
-                new File([buffer], doc.fileName, { type: "application/octet-stream" })
-              );
-            }
-
-            for (const doc of agreementFiles) {
-              if (!doc?.entry) continue;
-              const buffer = await doc.entry.async("arraybuffer");
-              formData.append(
-                "agreement_letter",
-                new File([buffer], doc.fileName, { type: "application/octet-stream" })
-              );
-            }
-
-            for (const doc of photoFiles) {
-              if (!doc?.entry) continue;
-              const buffer = await doc.entry.async("arraybuffer");
-              formData.append(
-                "farmer_photo",
-                new File([buffer], doc.fileName, { type: "application/octet-stream" })
-              );
-            }
-
-            fileCountMeta.push({
-              farmer_id:              farmerId,
-              aadhar_count:           aadharFiles.length,
-              agreement_letter_count: agreementFiles.length,
-              farmer_photo_count:     photoFiles.length,
-            });
-          }
-
-          formData.append("farmer_ids",           JSON.stringify(batchFarmerIds));
-          formData.append("file_counts",          JSON.stringify(fileCountMeta));
-          formData.append("client_batch_number",  String(clientBatchNumber));
-          formData.append("client_total_batches", String(totalBatches));
-          formData.append("zip_folder",           zipRootFolder || "farmers");
-
+          miniZipFile = await buildMiniZipForFarmers(batchFarmerIds, clientBatchNumber);
         } catch (buildErr) {
-          const reason = `FormData build failed: ${buildErr.message}`;
+          const reason = `Build failed: ${buildErr.message}`;
           totalSkipped += 1;
 
           setBatchStatusMap((prev) => ({
@@ -423,7 +416,28 @@ const DocumentUploading = () => {
           continue;
         }
 
-        // ── Upload ─────────────────────────────────────────────────────
+        // ── Upload mini ZIP ────────────────────────────────────────────
+        const formData = new FormData();
+        formData.append("zipFile", miniZipFile);
+        formData.append("batch_number", "1");
+        formData.append("batch_size", String(BATCH_SIZE));
+        formData.append("total_farmers", String(batchFarmerIds.length));
+        formData.append("client_batch_number", String(clientBatchNumber));
+        formData.append("client_total_batches", String(totalBatches));
+
+        // ✅ File count metadata bhi bhejo (backend ke liye helpful)
+        const farmerEntries = farmerZipEntriesRef.current;
+        const fileCountMeta = batchFarmerIds.map((fid) => {
+          const docs = farmerEntries[fid] || {};
+          return {
+            farmer_id: fid,
+            aadhar_count:           docs.aadhar?.length           || 0,
+            agreement_letter_count: docs.agreement_letter?.length || 0,
+            farmer_photo_count:     docs.farmer_photo?.length     || 0,
+          };
+        });
+        formData.append("file_counts", JSON.stringify(fileCountMeta));
+
         abortControllerRef.current = new AbortController();
 
         let res;
@@ -434,8 +448,8 @@ const DocumentUploading = () => {
             { signal: abortControllerRef.current.signal }
           );
         } catch (fetchErr) {
-          const isSkip    = skipCurrentRef.current || fetchErr.name === "AbortError";
-          const reason    = isSkip ? "Skipped by user during upload" : `Network error: ${fetchErr.message}`;
+          const isSkip = skipCurrentRef.current || fetchErr.name === "AbortError";
+          const reason = isSkip ? "Skipped by user during upload" : `Network error: ${fetchErr.message}`;
           const newStatus = isSkip ? BATCH_STATUS.SKIPPED : BATCH_STATUS.FAILED;
 
           if (isSkip) {
@@ -492,7 +506,7 @@ const DocumentUploading = () => {
           continue;
         }
 
-        const data           = res.data;
+        const data          = res.data;
         const batchSucceeded = data.succeeded || 0;
         const batchPartial   = data.partial   || 0;
         const batchFailed    = data.failed    || 0;
@@ -553,7 +567,7 @@ const DocumentUploading = () => {
 
       if (!cancelledRef.current) {
         setUploadSummary({
-          message:       "Upload complete",
+          message:       "ZIP upload complete",
           zip_folder:    zipRootFolder,
           total:         totalFarmers,
           total_batches: totalBatches,
@@ -566,7 +580,7 @@ const DocumentUploading = () => {
           errors:        allErrors,
           fileErrors:    allFileErrors,
         });
-        setMessage("Upload complete");
+        setMessage("ZIP upload complete");
       }
     } catch (err) {
       console.error("Upload error:", err);
@@ -644,14 +658,19 @@ const DocumentUploading = () => {
     [BATCH_STATUS.SKIPPED]:   "⊘ Skipped",
   };
 
+  // ── Helper: file count badge ───────────────────────────────────────────
+  // ✅ Ek farmer ke ek docType ke liye kitni files hain dikhata hai
   const renderFileBadge = (files) => {
     if (!files?.length) return <span style={{ color: "#94a3b8" }}>—</span>;
     return (
-      <span title={files.join("\n")} style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+      <span title={files.join("\n")} style={{
+        display: "inline-flex", flexDirection: "column", gap: 2,
+      }}>
         {files.map((f, i) => (
           <span key={i} style={{
-            display: "inline-block", maxWidth: 160,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            display: "inline-block",
+            maxWidth: 160, overflow: "hidden",
+            textOverflow: "ellipsis", whiteSpace: "nowrap",
             fontSize: 11, background: "#f0fdf4",
             border: "1px solid #bbf7d0", borderRadius: 4,
             padding: "1px 5px", color: "#15803d",
@@ -659,11 +678,12 @@ const DocumentUploading = () => {
             {f}
           </span>
         ))}
+        {/* ✅ Multiple files hain toh count badge */}
         {files.length > 1 && (
           <span style={{
-            fontSize: 10, color: "#2563eb", background: "#eff6ff",
-            border: "1px solid #bfdbfe", borderRadius: 4,
-            padding: "1px 5px", fontWeight: 600,
+            fontSize: 10, color: "#2563eb",
+            background: "#eff6ff", border: "1px solid #bfdbfe",
+            borderRadius: 4, padding: "1px 5px", fontWeight: 600,
           }}>
             {files.length} files
           </span>
@@ -704,6 +724,7 @@ const DocumentUploading = () => {
 
       <button onClick={handleReset}>Reset</button>
 
+      {/* ── Batch Plan ──────────────────────────────────────────────────── */}
       {correctedRows.length > 0 && !uploading && (
         <div style={{
           margin: "16px 0", padding: "12px 14px",
@@ -713,29 +734,39 @@ const DocumentUploading = () => {
           <p style={{ fontWeight: 600, marginBottom: 6 }}>Batch Plan</p>
           <p>Total valid farmers: {correctedRows.length}</p>
           <p>
-            {plannedBatches} batch{plannedBatches > 1 ? "es" : ""} of {BATCH_SIZE} farmers each — direct file upload (no ZIP)
+            Data will be extracted into {plannedBatches} mini ZIP
+            {plannedBatches > 1 ? "s" : ""} of {BATCH_SIZE} farmers each.
           </p>
+
+          {/* ✅ Total file count summary */}
           <p style={{ color: "#2563eb", marginTop: 4 }}>
             Total files to upload:{" "}
             <strong>
-              {correctedRows.reduce((acc, row) =>
-                acc +
-                (row.aadhar?.length          || 0) +
-                (row.agreement_letter?.length || 0) +
-                (row.farmer_photo?.length     || 0), 0
-              )}
+              {correctedRows.reduce((acc, row) => {
+                return acc
+                  + (row.aadhar?.length           || 0)
+                  + (row.agreement_letter?.length  || 0)
+                  + (row.farmer_photo?.length      || 0);
+              }, 0)}
             </strong>
+          </p>
+
+          <p style={{ color: "#64748b", marginTop: 4 }}>
+            ZIP → JSZip → {BATCH_SIZE} farmers extract → mini ZIP → send
           </p>
         </div>
       )}
 
+      {/* ── Upload Progress ──────────────────────────────────────────────── */}
       {uploading && batchProgress && (
         <div style={{
           margin: "16px 0", padding: "14px 16px",
           border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13, color: "#475569" }}>
-            <span>Batch {batchProgress.current_batch}/{batchProgress.total_batches}</span>
+            <span>
+              Batch {batchProgress.current_batch}/{batchProgress.total_batches} — {BATCH_SIZE} farmers/mini ZIP
+            </span>
             <span style={{ fontWeight: 600 }}>{overallPercent}%</span>
           </div>
 
@@ -749,7 +780,7 @@ const DocumentUploading = () => {
           {!paused && (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 12, color: "#64748b" }}>
-                <span>Uploading files to server...</span>
+                <span>Current mini ZIP uploading to server...</span>
                 <span style={{ fontWeight: 600, color: "#f97316" }}>{xhrPercent}%</span>
               </div>
               <div style={{ height: 5, background: "#e2e8f0", borderRadius: 99, overflow: "hidden", marginBottom: 10 }}>
@@ -766,6 +797,7 @@ const DocumentUploading = () => {
               padding: "8px 12px", background: "#fef9c3",
               border: "1px solid #fde047", borderRadius: 6,
               fontSize: 13, color: "#854d0e", marginBottom: 10,
+              display: "flex", alignItems: "center", gap: 8,
             }}>
               ⏸ Upload paused — current batch will finish, then wait.
             </div>
@@ -832,8 +864,9 @@ const DocumentUploading = () => {
                     {b.partial   > 0 && <span style={{ color: "#f59e0b" }}>{b.partial} partial</span>}
                     {b.failed    > 0 && <span style={{ color: "#dc2626" }}>{b.failed} failed</span>}
                     {b.skipped   > 0 && <span style={{ color: "#f97316" }}>{b.skipped} skipped</span>}
-                    {b.reason    && <span style={{ color: "#64748b", fontStyle: "italic" }}>— {b.reason}</span>}
+                    {b.reason && <span style={{ color: "#64748b", fontStyle: "italic" }}>— {b.reason}</span>}
                   </div>
+
                   {b.fileErrors?.length > 0 && (
                     <div style={{ marginTop: 4, paddingLeft: 12, borderLeft: "2px solid #fef3c7" }}>
                       {b.fileErrors.map((fe, i) => (
@@ -851,6 +884,7 @@ const DocumentUploading = () => {
         </div>
       )}
 
+      {/* ── Batch Status Overview ────────────────────────────────────────── */}
       {!uploading && Object.keys(batchStatusMap).length > 0 && (
         <div style={{
           margin: "16px 0", padding: "12px 14px",
@@ -887,9 +921,11 @@ const DocumentUploading = () => {
         </div>
       )}
 
+      {/* ── Valid / Invalid tables ───────────────────────────────────────── */}
       <div className="stack-container">
         <div className="box green">
           <h3>Valid Data ({correctedRows.length})</h3>
+
           <div className="table-scroll">
             <table>
               <thead>
@@ -897,7 +933,8 @@ const DocumentUploading = () => {
                   <th>farmer_id *</th>
                   <th>aadhar * <span style={{ color: "#2563eb", fontWeight: 400, fontSize: 11 }}>(multi-file)</span></th>
                   <th>agreement_letter * <span style={{ color: "#2563eb", fontWeight: 400, fontSize: 11 }}>(multi-file)</span></th>
-                  <th>farmer_photo <span style={{ color: "#64748b", fontWeight: 400, fontSize: 11 }}>(optional)</span></th>
+                  <th>farmer_photo <span style={{ color: "#64748b", fontWeight: 400, fontSize: 11 }}>(optional, multi)</span></th>
+                  {/* ✅ Total files column */}
                   <th style={{ color: "#2563eb" }}>Total Files</th>
                 </tr>
               </thead>
@@ -907,9 +944,11 @@ const DocumentUploading = () => {
                     (row.aadhar?.length          || 0) +
                     (row.agreement_letter?.length || 0) +
                     (row.farmer_photo?.length     || 0);
+
                   return (
                     <tr key={`${row.farmer_id}-${index}`}>
                       <td style={{ fontWeight: 600 }}>{row.farmer_id}</td>
+                      {/* ✅ renderFileBadge — array of file names dikhata hai */}
                       <td>{renderFileBadge(row.aadhar)}</td>
                       <td>{renderFileBadge(row.agreement_letter)}</td>
                       <td>{renderFileBadge(row.farmer_photo)}</td>
@@ -941,9 +980,10 @@ const DocumentUploading = () => {
               : "2. Send to Database"}
           </button>
 
-          {message  && <p style={{ color: "green" }}>{message}</p>}
+          {message && <p style={{ color: "green" }}>{message}</p>}
           {dbError  && <p style={{ color: "red"   }}>{dbError}</p>}
 
+          {/* Upload Summary */}
           {uploadSummary && !uploading && (
             <div style={{
               marginTop: 12, padding: "12px 14px",
@@ -954,9 +994,9 @@ const DocumentUploading = () => {
               <p style={{ fontWeight: 600, marginBottom: 6 }}>Upload Summary</p>
               <p>Total farmers: {uploadSummary.total}</p>
               <p>Batches: {uploadSummary.total_batches} × {uploadSummary.batch_size} farmers</p>
-              <p style={{ color: "#16a34a" }}>Succeeded: {uploadSummary.succeeded}</p>
-              <p style={{ color: "#f59e0b" }}>Partial: {uploadSummary.partial}</p>
-              <p style={{ color: uploadSummary.failed  > 0 ? "#dc2626" : "#64748b" }}>Failed: {uploadSummary.failed}</p>
+              <p style={{ color: "#16a34a" }}>Succeeded (all files ok): {uploadSummary.succeeded}</p>
+              <p style={{ color: "#f59e0b" }}>Partial (some files failed): {uploadSummary.partial}</p>
+              <p style={{ color: uploadSummary.failed  > 0 ? "#dc2626" : "#64748b" }}>Failed (farmer not uploaded): {uploadSummary.failed}</p>
               <p style={{ color: uploadSummary.skipped > 0 ? "#f97316" : "#64748b" }}>Skipped: {uploadSummary.skipped}</p>
 
               {uploadSummary.errors?.length > 0 && (
@@ -974,7 +1014,7 @@ const DocumentUploading = () => {
 
               {uploadSummary.fileErrors?.length > 0 && (
                 <div style={{ marginTop: 8 }}>
-                  <p style={{ fontWeight: 600, color: "#b45309", marginBottom: 4 }}>Partial uploads:</p>
+                  <p style={{ fontWeight: 600, color: "#b45309", marginBottom: 4 }}>Partial uploads (some files failed):</p>
                   <div style={{ maxHeight: 140, overflowY: "auto", fontSize: 12 }}>
                     {uploadSummary.fileErrors.map((fe, i) => (
                       <div key={i} style={{ color: "#b45309", marginBottom: 2 }}>
@@ -988,8 +1028,10 @@ const DocumentUploading = () => {
           )}
         </div>
 
+        {/* ── Invalid table ─────────────────────────────────────────────── */}
         <div className="box red">
           <h3>Incorrect Data ({incorrectRows.length})</h3>
+
           <div className="table-scroll">
             <table>
               <thead>
@@ -1005,6 +1047,7 @@ const DocumentUploading = () => {
                   <tr key={`${row.farmer_id || "invalid"}-${index}`}>
                     {REQUIRED_HEADERS.map((col) => (
                       <td key={col}>
+                        {/* ✅ Incorrect table mein bhi array-aware display */}
                         {col === "farmer_id" ? (
                           <input
                             value={row[col] ?? ""}
@@ -1016,18 +1059,24 @@ const DocumentUploading = () => {
                           />
                         ) : (
                           <span style={{ fontSize: 12, color: "#475569" }}>
-                            {Array.isArray(row[col]) ? row[col].join(", ") : (row[col] ?? "—")}
+                            {Array.isArray(row[col])
+                              ? row[col].join(", ")
+                              : (row[col] ?? "—")}
                           </span>
                         )}
                       </td>
                     ))}
                     <td>
                       <span style={{ fontSize: 12, color: "#475569" }}>
-                        {Array.isArray(row.farmer_photo) ? row.farmer_photo.join(", ") : (row.farmer_photo ?? "—")}
+                        {Array.isArray(row.farmer_photo)
+                          ? row.farmer_photo.join(", ")
+                          : (row.farmer_photo ?? "—")}
                       </span>
                     </td>
                     <td style={{ color: "red" }}>{row.__errors?.join(", ")}</td>
-                    <td><button onClick={() => handleApprove(index)}>Approve</button></td>
+                    <td>
+                      <button onClick={() => handleApprove(index)}>Approve</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
