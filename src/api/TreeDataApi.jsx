@@ -12,18 +12,23 @@ const getAuthHeaders = () => {
   };
 };
 
+// ✅ Helper — 0 bhi correctly pass hoga
+const toNum = (val) =>
+  val !== null && val !== undefined && val !== "" ? Number(val) : null;
+
 /* ---------------- UPLOAD TREE DATA ---------------- */
 export const uploadTreeData = async (data) => {
   const formattedData = data.map((item) => ({
     parcel_id:        item.parcel_id,
-    project_code:     item.project_code     || null,
+    project_code:     item.project_code    || null,
     species_name:     item.species_name,
-    plantation_type:  item.plantation_type  || null,
-    plantation_year:  item.plantation_year  ? Number(item.plantation_year) : null,
-    uploaded_by:      item.uploaded_by      || "system",
-    surviving_plants: item.surviving_plants ? Number(item.surviving_plants) : null,
-    actual_planted:   item.actual_planted   ? Number(item.actual_planted)   : null,
-    mortality:        item.mortality        ? Number(item.mortality)        : null,
+    plantation_type:  item.plantation_type || null,
+    uploaded_by:      item.uploaded_by     || "system",
+    plantation_year:  toNum(item.plantation_year),
+    surviving_plants: toNum(item.surviving_plants),
+    actual_planted:   toNum(item.actual_planted),
+    mortality:        toNum(item.mortality),
+    actual_area_ha:   toNum(item.actual_area_ha),
   }));
 
   const response = await axios.post(
@@ -38,16 +43,17 @@ export const uploadTreeData = async (data) => {
 /* ---------------- UPDATE TREE DATA ---------------- */
 export const updateTreeData = async (id, data) => {
   const formattedData = {
-    parcel_id:        data.parcel_id        || null,
-    project_code:     data.project_code     || null,
-    species_name:     data.species_name     || null,
-    plantation_type:  data.plantation_type  || null,
-    plantation_year:  data.plantation_year  ? Number(data.plantation_year)  : null,
-    uploaded_by:      data.uploaded_by      || null,
-    is_active:        data.is_active        ?? null,
-    surviving_plants: data.surviving_plants ? Number(data.surviving_plants) : null,
-    actual_planted:   data.actual_planted   ? Number(data.actual_planted)   : null,
-    mortality:        data.mortality        ? Number(data.mortality)        : null,
+    parcel_id:        data.parcel_id       || null,
+    project_code:     data.project_code    || null,
+    species_name:     data.species_name    || null,
+    plantation_type:  data.plantation_type || null,
+    uploaded_by:      data.uploaded_by     || null,
+    is_active:        data.is_active       ?? null,
+    plantation_year:  toNum(data.plantation_year),
+    surviving_plants: toNum(data.surviving_plants),
+    actual_planted:   toNum(data.actual_planted),
+    mortality:        toNum(data.mortality),
+    actual_area_ha:   toNum(data.actual_area_ha),
   };
 
   const response = await axios.put(

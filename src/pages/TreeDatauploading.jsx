@@ -14,6 +14,7 @@ const ALLOWED_FIELDS = [
   "surviving_plants",
   "actual_planted",
   "mortality",
+  "actual_area_ha", // ✅ Added
 ];
 
 /* ---------------- REQUIRED HEADERS ---------------- */
@@ -44,7 +45,7 @@ const sanitizeRow = (row) => {
 
     // Numeric fields
     if (
-      ["plantation_year", "surviving_plants", "actual_planted", "mortality"].includes(key)
+      ["plantation_year", "surviving_plants", "actual_planted", "mortality", "actual_area_ha"].includes(key) // ✅ Added
     ) {
       const num = Number(value);
       cleaned[key] = isNaN(num) ? null : num;
@@ -102,6 +103,16 @@ const validateRow = (row) => {
     errors.push("mortality must be a valid number");
   }
 
+  // ✅ Added
+  if (
+    row.actual_area_ha !== null &&
+    row.actual_area_ha !== undefined &&
+    row.actual_area_ha !== "" &&
+    isNaN(Number(row.actual_area_ha))
+  ) {
+    errors.push("actual_area_ha must be a valid number");
+  }
+
   return { isValid: errors.length === 0, errors };
 };
 
@@ -128,12 +139,12 @@ const normalizeFieldName = (name) => {
     species_name:   "species_name",
 
     // plantation_type
-    plantationtype:   "plantation_type",
+    plantationtype:    "plantation_type",
     "plantation type": "plantation_type",
     plantation_type:   "plantation_type",
 
     // plantation_year
-    plantationyear:   "plantation_year",
+    plantationyear:    "plantation_year",
     "plantation year": "plantation_year",
     plantation_year:   "plantation_year",
 
@@ -149,6 +160,13 @@ const normalizeFieldName = (name) => {
 
     // mortality
     mortality: "mortality",
+
+    // actual_area_ha ✅ Added
+    actualareaHA:       "actual_area_ha",
+    actualareaha:       "actual_area_ha",
+    "actual area ha":   "actual_area_ha",
+    "actual area (ha)": "actual_area_ha",
+    actual_area_ha:     "actual_area_ha",
   };
 
   return mapping[lower] || lower;
@@ -156,13 +174,13 @@ const normalizeFieldName = (name) => {
 
 /* ---------------- COMPONENT ---------------- */
 const TreeDataUpload = () => {
-  const [file, setFile]               = useState(null);
+  const [file, setFile]                   = useState(null);
   const [correctedRows, setCorrectedRows] = useState([]);
   const [incorrectRows, setIncorrectRows] = useState([]);
-  const [uploading, setUploading]     = useState(false);
-  const [message, setMessage]         = useState("");
-  const [dbError, setDbError]         = useState("");
-  const fileInputRef                  = useRef(null);
+  const [uploading, setUploading]         = useState(false);
+  const [message, setMessage]             = useState("");
+  const [dbError, setDbError]             = useState("");
+  const fileInputRef                      = useRef(null);
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
@@ -193,9 +211,9 @@ const TreeDataUpload = () => {
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text   = await file.text();
         const result = Papa.parse(text, {
-          header:           true,
-          skipEmptyLines:   true,
-          transformHeader:  normalizeFieldName,
+          header:          true,
+          skipEmptyLines:  true,
+          transformHeader: normalizeFieldName,
         });
         rawRows = result.data;
       } else {
@@ -222,8 +240,8 @@ const TreeDataUpload = () => {
           filtered[field] = row[field] ?? null;
         });
 
-        filtered     = sanitizeRow(filtered);
-        const check  = validateRow(filtered);
+        filtered    = sanitizeRow(filtered);
+        const check = validateRow(filtered);
 
         if (check.isValid) {
           valid.push(filtered);
@@ -260,6 +278,7 @@ const TreeDataUpload = () => {
       surviving_plants: row.surviving_plants ? Number(row.surviving_plants) : null,
       actual_planted:   row.actual_planted   ? Number(row.actual_planted)   : null,
       mortality:        row.mortality        ? Number(row.mortality)        : null,
+      actual_area_ha:   row.actual_area_ha   ? Number(row.actual_area_ha)   : null, // ✅ Added
     }));
 
     try {
