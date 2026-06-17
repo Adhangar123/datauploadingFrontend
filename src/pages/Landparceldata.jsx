@@ -10,7 +10,7 @@ const NUMBER_FIELDS = ["area_ha"];
 
 const STRING_FIELDS = [
   "parcel_id",
-  "project_id",
+  "project_code",
   "farmer_id",
   "plot_num",
   "khata_num",
@@ -19,7 +19,7 @@ const STRING_FIELDS = [
 /* ─────────────────────────────────────────────────────────────
    BACKEND REQUIRED FIELDS
 ───────────────────────────────────────────────────────────── */
-const BACKEND_REQUIRED = ["parcel_id", "geom", "project_id", "farmer_id"];
+const BACKEND_REQUIRED = ["parcel_id", "geom", "project_code", "farmer_id"];
 
 /* ─────────────────────────────────────────────────────────────
    VALID GEOMETRY TYPES
@@ -68,8 +68,8 @@ const validateRow = (row) => {
   if (!row.parcel_id || typeof row.parcel_id !== "string" || row.parcel_id.trim() === "") {
     errors.push("parcel_id is required");
   }
-  if (!row.project_id || row.project_id.toString().trim() === "") {
-    errors.push("project_id is required");
+  if (!row.project_code || row.project_code.toString().trim() === "") {
+    errors.push("project_code is required");
   }
   if (!row.farmer_id || row.farmer_id.toString().trim() === "") {
     errors.push("farmer_id is required");
@@ -105,8 +105,8 @@ const normalizeRow = (f, i) => {
       ? String(prop(p, "parcel_id"))
       : `parcel_${i + 1}`,
 
-    project_id:
-      prop(p, "project_id") != null ? String(prop(p, "project_id")) : null,
+    project_code:
+      prop(p, "project_code") != null ? String(prop(p, "project_code")) : null,
 
     farmer_id:
       prop(p, "farmer_id") != null ? String(prop(p, "farmer_id")) : null,
@@ -158,7 +158,7 @@ const Landparceldata = () => {
 
   const columns = [
     "parcel_id",
-    "project_id",
+    "project_code",
     "farmer_id",
     "geom",
     "area_ha",
@@ -286,7 +286,7 @@ const Landparceldata = () => {
 
     const payload = correctedRows.map((row) => ({
       parcel_id:  row.parcel_id,
-      project_id: row.project_id,
+      project_code: row.project_code,
       farmer_id:  row.farmer_id,
       geom:       row.geom,
       area_ha:    row.area_ha   ?? null,

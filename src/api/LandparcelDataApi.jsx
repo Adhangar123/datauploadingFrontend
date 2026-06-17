@@ -66,11 +66,11 @@ export function buildQueryString(params = {}) {
 
   // Identity filters
   if (params.parcel_id)  q.set("parcel_id",  params.parcel_id);
-  if (params.project_id) q.set("project_id", params.project_id);
+  if (params.project_code) q.set("project_code", params.project_code);
   if (params.farmer_id)  q.set("farmer_id",  params.farmer_id);
 
   // Multi-value IN filters (comma-separated)
-  if (params.project_ids?.length) q.set("project_ids", params.project_ids.join(","));
+  if (params.project_codes?.length) q.set("project_codes", params.project_codes.join(","));
   if (params.farmer_ids?.length)  q.set("farmer_ids",  params.farmer_ids.join(","));
 
   // Text / ILIKE filters
@@ -198,7 +198,7 @@ export function normalizeParcel(parcel) {
     farmer_district: parcel.district || "—",
     farmer_village:  parcel.village  || "—",
 
-    project_id: parcel.project_id,
+    project_code: parcel.project_code,
     status:     parcel.is_active === false ? "inactive" : (parcel.status || "active"),
     khata_num:  parcel.khata_num,
     plot_num:   parcel.plot_num,
@@ -260,7 +260,7 @@ export function parcelsToGeoJSON(parcels = []) {
           farmer_state:    p.state || "—",
           farmer_district: p.district || "—",
           farmer_village:  p.village || "—",
-          project_id:      p.project_id || "—",
+          project_code:      p.project_code || "—",
           status:          p.status || "active",
           khata_num:       p.khata_num,
           plot_num:        p.plot_num,
@@ -296,7 +296,7 @@ export function filterParcels(parcels = [], filters = {}) {
     }
     if (status    && (p.status    || "").toLowerCase() !== status.toLowerCase())    return false;
     if (district  && (p.district  || "").toLowerCase() !== district.toLowerCase())  return false;
-    if (projectId && (p.project_id|| "").toLowerCase() !== projectId.toLowerCase()) return false;
+    if (projectId && (p.project_code|| "").toLowerCase() !== projectId.toLowerCase()) return false;
     if (fn        && !(p.farmer_name || p.owner || "").toLowerCase().includes(fn))  return false;
     if (vil       && !(p.village  || "").toLowerCase().includes(vil))               return false;
     if (st        && (p.state     || "").toLowerCase() !== st)                      return false;
@@ -312,7 +312,7 @@ export function getUniqueValues(parcels = [], fieldKey) {
 }
 
 export function getProjects(parcels = []) {
-  return [...new Set(parcels.map(p => p.project_id).filter(Boolean))].sort();
+  return [...new Set(parcels.map(p => p.project_code).filter(Boolean))].sort();
 }
 
 export function getFarmersList(parcels = []) {

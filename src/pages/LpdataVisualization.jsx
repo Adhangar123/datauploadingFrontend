@@ -85,7 +85,7 @@ const FILTER_INIT = {
   state: "",
   district: "",
   village: "",
-  project_id: "",
+  project_code: "",
   is_active: "",
   area_ha_min: "",
   area_ha_max: "",
@@ -227,7 +227,7 @@ export default function LpdataVisualization() {
       state: filters.state || undefined,
       district: filters.district || undefined,
       village: filters.village || undefined,
-      project_id: filters.project_id || undefined,
+      project_code: filters.project_code || undefined,
       is_active: filters.is_active !== "" ? filters.is_active : undefined,
       area_ha_min: filters.area_ha_min || undefined,
       area_ha_max: filters.area_ha_max || undefined,
@@ -263,7 +263,7 @@ export default function LpdataVisualization() {
     filters.state,
     filters.district,
     filters.village,
-    filters.project_id,
+    filters.project_code,
     filters.is_active,
     filters.area_ha_min,
     filters.area_ha_max,
@@ -385,7 +385,7 @@ export default function LpdataVisualization() {
       <div class="lp-popup-row">Village: <strong>${p.village || "—"}</strong></div>
       <div class="lp-popup-row">District: <strong>${p.district || "—"}</strong></div>
       <div class="lp-popup-row">State: <strong>${p.state || "—"}</strong></div>
-      <div class="lp-popup-row">Project: <strong>${p.project_id || "—"}</strong></div>
+      <div class="lp-popup-row">Project: <strong>${p.project_code || "—"}</strong></div>
       <div class="lp-popup-row">Status: <strong>${p.status || "active"}</strong></div>
       ${p.khata_num ? `<div class="lp-popup-row">Khata: <strong>${p.khata_num}</strong></div>` : ""}
     `, { className: "lp-popup" });
@@ -533,8 +533,8 @@ export default function LpdataVisualization() {
               <label className="filter-label">PROJECT</label>
               <select
                 className="filter-select"
-                value={filters.project_id}
-                onChange={(e) => setInstantFilter("project_id", e.target.value)}
+                value={filters.project_code}
+                onChange={(e) => setInstantFilter("project_code", e.target.value)}
               >
                 <option value="">All Projects</option>
                 {projectOptions.map((p) => (
@@ -650,8 +650,8 @@ export default function LpdataVisualization() {
                       <th className="lp-th-sort" onClick={() => handleSort("parcel_id")}>
                         Parcel ID {sortIcon("parcel_id")}
                       </th>
-                      <th className="lp-th-sort" onClick={() => handleSort("project_id")}>
-                        Project {sortIcon("project_id")}
+                      <th className="lp-th-sort" onClick={() => handleSort("project_code")}>
+                        Project {sortIcon("project_code")}
                       </th>
                       <th className="lp-th-sort" onClick={() => handleSort("area_ha")}>
                         Area (ha) {sortIcon("area_ha")}
@@ -699,7 +699,7 @@ export default function LpdataVisualization() {
                               : (filters.page - 1) * filters.limit + idx + 1}
                           </td>
                           <td className="lp-cell-mono">{shortId(id)}</td>
-                          <td className="lp-cell-mono">{parcel.project_id || "—"}</td>
+                          <td className="lp-cell-mono">{parcel.project_code || "—"}</td>
                           <td>{fmt(parcel.area_ha)}</td>
                           <td><strong>{parcel.farmer_name || parcel.owner || "—"}</strong></td>
                           <td>{parcel.village || "—"}</td>
