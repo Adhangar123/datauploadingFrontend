@@ -1,52 +1,12 @@
-const API_BASE_URL = "https://datauploadingbackend-13977221722.asia-south2.run.app/api/v1";
-
-// 🗺️ Bulk Upload Land Parcel Data
-export const uploadLandParcelData = async (parcelRows) => {
-  try {
-    const token = localStorage.getItem("auth_token");
-
-    if (!token) {
-      throw new Error("User not authenticated. Please login again.");
-    }
-
-    const response = await fetch(`${API_BASE_URL}/land-parcel/upload`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(parcelRows),
-    });
-
-    // 👇 handle non-JSON response safely
-    let data;
-    try {
-      data = await response.json();
-    } catch {
-      throw new Error("Invalid server response");
-    }
-
-    // ❌ API error
-    if (!response.ok) {
-      throw new Error(data.message || "Parcel upload failed");
-    }
-
-    // ✅ Success
-    return data;
-
-  } catch (error) {
-    console.error("❌ Upload Error:", error.message);
-    throw error;
-  }
-};
 // LandparcelDataApi.js
-// Aligned with updated backend: server-side filtering, sorting, pagination
+// Aligned with backend: bulk upsert + server-side filtering, sorting, pagination
 
 const BASE_URL =
   "https://datauploadingbackend-13977221722.asia-south2.run.app/api/v1";
 
 /* ──────────────────────────────────────────────────────────────
    TOKEN HELPERS
+   ✅ Single source of truth — used by EVERY API call in this file
 ────────────────────────────────────────────────────────────── */
 export function getAuthToken() {
   return (
@@ -57,49 +17,98 @@ export function getAuthToken() {
   );
 }
 
+function clearAuthToken() {
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("lp_jwt");
+}
+
+/* ──────────────────────────────────────────────────────────────
+   BULK UPLOAD / UPSERT LAND PARCEL DATA
+   Matches backend's upsertLandParcelData controller exactly:
+   - sends an ARRAY directly as body (backend wraps single objects itself)
+   - reads back { success, message, processed, skipped, batches, skipped_errors? }
+     on success, and { success:false, message, skipped, errors:[{parcel_id,reason}] }
+     on full validation failure (400)
+────────────────────────────────────────────────────────────── */
+export const uploadLandParcelData = async (parcelRows) => {
+  try {
+    const token = getAuthToken(); // ✅ fixed: pehle "auth_token" key padhi ja rahi thi (galat key)
+
+    if (!token) {
+      throw new Error("User not authenticated. Please login again.");
+    }
+
+    const response = await fetch(`${BASE_URL}/land-parcel/upload`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(parcelRows),
+    });
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Invalid server response");
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      clearAuthToken();
+      throw new Error("Session expired. Please login again.");
+    }
+
+    if (!response.ok) {
+      // ✅ backend ke validation-failure shape (skipped / errors) ko preserve karke throw karo
+      const err = new Error(data.message || "Parcel upload failed");
+      err.skipped = data.skipped;
+      err.errors = data.errors; // [{ parcel_id, reason }]
+      throw err;
+    }
+
+    return data; // { success, message, processed, skipped, batches, skipped_errors? }
+  } catch (error) {
+    console.error("❌ Upload Error:", error.message);
+    throw error;
+  }
+};
+
 /* ──────────────────────────────────────────────────────────────
    BUILD QUERY STRING from filter/sort/pagination params
-   Matches backend's validateFilters() exactly
 ────────────────────────────────────────────────────────────── */
 export function buildQueryString(params = {}) {
   const q = new URLSearchParams();
 
-  // Identity filters
   if (params.parcel_id)  q.set("parcel_id",  params.parcel_id);
   if (params.project_code) q.set("project_code", params.project_code);
   if (params.farmer_id)  q.set("farmer_id",  params.farmer_id);
 
-  // Multi-value IN filters (comma-separated)
   if (params.project_codes?.length) q.set("project_codes", params.project_codes.join(","));
   if (params.farmer_ids?.length)  q.set("farmer_ids",  params.farmer_ids.join(","));
 
-  // Text / ILIKE filters
   if (params.farmer_name) q.set("farmer_name", params.farmer_name);
   if (params.state)        q.set("state",        params.state);
   if (params.district)     q.set("district",     params.district);
   if (params.village)      q.set("village",      params.village);
 
-  // Boolean
   if (params.is_active !== undefined && params.is_active !== "")
     q.set("is_active", String(params.is_active));
 
-  // Numeric range
   if (params.area_ha_min !== undefined && params.area_ha_min !== "")
     q.set("area_ha_min", params.area_ha_min);
   if (params.area_ha_max !== undefined && params.area_ha_max !== "")
     q.set("area_ha_max", params.area_ha_max);
 
-  // Date ranges
   if (params.created_from) q.set("created_from", params.created_from);
   if (params.created_to)   q.set("created_to",   params.created_to);
   if (params.updated_from) q.set("updated_from", params.updated_from);
   if (params.updated_to)   q.set("updated_to",   params.updated_to);
 
-  // Pagination — limit=0 = fetch ALL (default: no limit)
   q.set("page",  String(params.page  ?? 1));
   q.set("limit", String(params.limit ?? 0));
 
-  // Sorting
   if (params.sort_by)  q.set("sort_by",  params.sort_by);
   if (params.sort_dir) q.set("sort_dir", params.sort_dir);
 
@@ -126,9 +135,7 @@ export async function fetchLandParcels(params = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      localStorage.removeItem("token");
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("lp_jwt");
+      clearAuthToken();
       throw new Error("Session expired. Please login again.");
     }
 
@@ -141,7 +148,6 @@ export async function fetchLandParcels(params = {}) {
     const json = await response.json();
     console.log("Land Parcel API Response:", json);
 
-    // Backend returns { success, data[], pagination{} }
     let parcels = [];
     if (Array.isArray(json))            parcels = json;
     else if (Array.isArray(json.data))  parcels = json.data;
@@ -175,7 +181,6 @@ export function normalizeParcel(parcel) {
     parcel.area_ha ?? parcel.area_hectares ?? parcel.hectares ?? parcel.area ?? 0
   ) || 0;
 
-  // Backend returns flat columns from the JOIN: farmer_name, state, district, village
   return {
     ...parcel,
     id:             parcel.parcel_id || parcel.id || parcel._id,
@@ -185,7 +190,6 @@ export function normalizeParcel(parcel) {
     area_hectares:  areaHa,
     area_ha:        areaHa,
 
-    // Farmer info comes flat from JOIN
     farmer_id:      parcel.farmer_id,
     farmer_name:    parcel.farmer_name  || parcel.owner || "—",
     owner:          parcel.farmer_name  || parcel.owner || "—",
@@ -193,7 +197,6 @@ export function normalizeParcel(parcel) {
     district:       parcel.district     || "—",
     village:        parcel.village      || "—",
 
-    // Aliases for backward compat with existing component
     farmer_state:    parcel.state    || "—",
     farmer_district: parcel.district || "—",
     farmer_village:  parcel.village  || "—",
@@ -275,7 +278,6 @@ export function parcelsToGeoJSON(parcels = []) {
 
 /* ──────────────────────────────────────────────────────────────
    CLIENT-SIDE FILTER (for already-loaded data — instant search)
-   NOTE: Primary filtering is server-side; this is for instant UX.
 ────────────────────────────────────────────────────────────── */
 export function filterParcels(parcels = [], filters = {}) {
   const {

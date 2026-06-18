@@ -17,12 +17,12 @@ const STRING_FIELDS = [
 ];
 
 /* ─────────────────────────────────────────────────────────────
-   BACKEND REQUIRED FIELDS
+   BACKEND REQUIRED FIELDS (matches REQUIRED_FIELDS in controller)
 ───────────────────────────────────────────────────────────── */
 const BACKEND_REQUIRED = ["parcel_id", "geom", "project_code", "farmer_id"];
 
 /* ─────────────────────────────────────────────────────────────
-   VALID GEOMETRY TYPES
+   VALID GEOMETRY TYPES (matches VALID_GEOM_TYPES in controller)
 ───────────────────────────────────────────────────────────── */
 const VALID_GEOM_TYPES = new Set([
   "Polygon",
@@ -53,14 +53,54 @@ const normalizeGeometry = (geometry) => {
 };
 
 /* ─────────────────────────────────────────────────────────────
-   PROPERTY RESOLVER
-   KML fields sometimes export with trailing underscore
+   FIELD ALIASES
+   Real-world KML/SHP exports are inconsistent about field naming
+   (typos, project_id vs project_code, trailing underscores, etc).
+   Each logical field below lists every raw key we've seen in the
+   wild that should map to it. Add new variants here as you
+   encounter them — no need to touch normalizeRow/validateRow.
 ───────────────────────────────────────────────────────────── */
-const prop = (properties, key) =>
-  properties?.[key] ?? properties?.[`${key}_`] ?? null;
+const FIELD_ALIASES = {
+  parcel_id: ["parcel_id"],
+  project_code: [
+    "project_code",
+    "project_id",
+    "proejct_id",   // <- typo seen in source KML ("proejct" instead of "project")
+    "proejct_code",
+    "projectcode",
+  ],
+  farmer_id: ["farmer_id"],
+  area_ha: ["area_ha"],
+  plot_num: ["plot_num"],
+  khata_num: ["khata_num"],
+};
 
 /* ─────────────────────────────────────────────────────────────
-   VALIDATE ROW
+   PROPERTY RESOLVER
+   Looks up a logical field name against every known alias,
+   also checking each alias with a trailing underscore (KML
+   fields sometimes export that way too).
+───────────────────────────────────────────────────────────── */
+const prop = (properties, key) => {
+  if (!properties) return null;
+
+  const aliases = FIELD_ALIASES[key] || [key];
+
+  for (const alias of aliases) {
+    if (properties[alias] !== undefined && properties[alias] !== null) {
+      return properties[alias];
+    }
+    const underscored = `${alias}_`;
+    if (properties[underscored] !== undefined && properties[underscored] !== null) {
+      return properties[underscored];
+    }
+  }
+
+  return null;
+};
+
+/* ─────────────────────────────────────────────────────────────
+   VALIDATE ROW (mirrors backend validateRow exactly)
 ───────────────────────────────────────────────────────────── */
 const validateRow = (row) => {
   const errors = [];
@@ -140,6 +180,12 @@ const parseGeoJSON = (text) => {
   const geojson = JSON.parse(text);
   return geojson.features.map((f, i) => normalizeRow(f, i));
 };
+
+/* ─────────────────────────────────────────────────────────────
+   formatRowErrors — turns backend's [{parcel_id, reason}] into readable text
+───────────────────────────────────────────────────────────── */
+const formatRowErrors = (rows = []) =>
+  rows.map((e) => `• ${e.parcel_id ?? "—"}: ${e.reason}`).join("\n");
 
 /* ─────────────────────────────────────────────────────────────
    COMPONENT
@@ -271,7 +317,6 @@ const Landparceldata = () => {
     setDbError("");
     setMessage("Uploading...");
 
-    // ── Exact same pattern as FarmerDataUpload ──
     const user   = JSON.parse(localStorage.getItem("user"));
     const userId = user?.user_id;
 
@@ -281,7 +326,7 @@ const Landparceldata = () => {
       return;
     }
 
-    // Unix epoch timestamp — same as FarmerDataUpload (e.g. 1775732195)
+    // Unix epoch timestamp — matches backend's BIGINT created_at/updated_at columns
     const nowUnix = Math.floor(Date.now() / 1000);
 
     const payload = correctedRows.map((row) => ({
@@ -293,7 +338,6 @@ const Landparceldata = () => {
       plot_num:   row.plot_num  ?? null,
       khata_num:  row.khata_num ?? null,
 
-      // ── audit fields — exact same as FarmerDataUpload ──
       created_by: userId,
       updated_by: userId,
       created_at: nowUnix,
@@ -302,12 +346,23 @@ const Landparceldata = () => {
 
     try {
       const result = await uploadLandParcelData(payload);
+
       setMessage(
         `✅ Successfully uploaded! | Processed: ${result.processed} | Skipped: ${result.skipped ?? 0}`
       );
+
+      // ✅ backend may still report per-row skip reasons even on success (skipped_errors)
+      if (result.skipped_errors?.length) {
+        setDbError("⚠️ Some rows were skipped:\n" + formatRowErrors(result.skipped_errors));
+      } else {
+        setDbError("");
+      }
+
       setCorrectedRows([]);
     } catch (err) {
-      setDbError("❌ " + err.message);
+      // ✅ surface backend's per-row validation errors (400 — all rows failed) if present
+      const detail = err.errors?.length ? "\n" + formatRowErrors(err.errors) : "";
+      setDbError("❌ " + err.message + detail);
     } finally {
       setUploading(false);
     }
@@ -385,7 +440,7 @@ const Landparceldata = () => {
           </button>
 
           {message && <p className="upload-message">{message}</p>}
-          {dbError && <p style={{ color: "red" }}>{dbError}</p>}
+          {dbError && <p style={{ color: "red", whiteSpace: "pre-line" }}>{dbError}</p>}
         </div>
 
         {/* ── INVALID TABLE ── */}
