@@ -10,22 +10,20 @@ import "../style/LpdataVisualization.css";
 
 import {
   fetchLandParcels,
-  computeSummary,
+  fetchFilterOptions,
+  normalizeOverview,
   parcelsToGeoJSON,
-  filterParcels,
-  getUniqueValues,
-  getProjects,
-  getVillagesList,
-  getStatesList,
-  getDistrictsList,
   aggregateByFarmer,
   aggregateByVillage,
 } from "../api/LandparcelDataApi";
 
 /* ─────────────────────────────────────────────
    CONSTANTS
+   ⚠️ Backend ab FIXED 50 rows/page deta hai — page-size selector
+      (25/50/100/200/500/All) hata diya gaya hai, kyunki backend
+      use ignore kar dega.
 ───────────────────────────────────────────── */
-const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500];
+const PAGE_SIZE = 50;
 
 const MAP_TILES = {
   satellite: {
@@ -79,6 +77,8 @@ const SectionHeader = ({ icon, title, subtitle, badge }) => (
 
 /* ─────────────────────────────────────────────
    FILTER STATE REDUCER
+   ⚠️ "limit" hata diya — backend fixed 50/page deta hai, isko
+      override karne ka koi tareeka nahi hai ab.
 ───────────────────────────────────────────── */
 const FILTER_INIT = {
   farmer_name: "",
@@ -94,7 +94,6 @@ const FILTER_INIT = {
   sort_by: "created_at",
   sort_dir: "DESC",
   page: 1,
-  limit: 0,
   search: "",
 };
 
@@ -104,8 +103,6 @@ function filterReducer(state, action) {
       return { ...state, [action.key]: action.value, page: 1 };
     case "SET_PAGE":
       return { ...state, page: action.value };
-    case "SET_LIMIT":
-      return { ...state, limit: action.value, page: 1 };
     case "SORT":
       return {
         ...state,
@@ -197,6 +194,14 @@ export default function LpdataVisualization() {
 
   const [parcels, setParcels] = useState([]);
   const [pagination, setPagination] = useState(null);
+  // ✅ NEW — backend ke `overview` block se aane wale filtered KPI totals
+  // (sirf currently-loaded 50 rows se nahi, balki SAARE filtered rows se)
+  const [overview, setOverview] = useState(null);
+  // ✅ NEW — poore dataset se distinct dropdown values (Project/State/District/Village)
+  // current page ke 50 rows se nahi.
+  const [filterOptions, setFilterOptions] = useState({
+    project_codes: [], states: [], districts: [], villages: [],
+  });
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState("");
@@ -206,12 +211,24 @@ export default function LpdataVisualization() {
   const [activeTab, setActiveTab] = useState("parcels");
   const [filters, dispatch] = useReducer(filterReducer, FILTER_INIT);
 
+  // Search box ka raw text — debounce hone tak isi se input control hota hai
+  const [searchInput, setSearchInput] = useState("");
+
   const geoJsonLayerRef = useRef(null);
   const debounceRef = useRef(null);
 
   useEffect(() => {
     if (!token) navigate("/login");
   }, [token, navigate]);
+
+  // ✅ NEW — dropdown options ek baar load hote hain (poora dataset se), page
+  // ya pagination se independent. Yeh sirf tab refresh hote hain jab token badle.
+  useEffect(() => {
+    if (!token) return;
+    fetchFilterOptions().then(({ options, error: err }) => {
+      if (!err) setFilterOptions(options);
+    });
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -236,10 +253,11 @@ export default function LpdataVisualization() {
       sort_by: filters.sort_by,
       sort_dir: filters.sort_dir,
       page: filters.page,
-      limit: filters.limit,
+      // ✅ search ab server-side jaata hai (farmer_name + parcel_id + plot_num)
+      search: filters.search || undefined,
     };
 
-    fetchLandParcels(serverParams).then(({ data, pagination: pg, error: err }) => {
+    fetchLandParcels(serverParams).then(({ data, pagination: pg, overview: ov, error: err }) => {
       if (err) {
         setError(err);
 
@@ -252,6 +270,8 @@ export default function LpdataVisualization() {
       } else {
         setParcels(data || []);
         setPagination(pg);
+        // ✅ overview backend se seedha aata hai — current filters ke according
+        setOverview(normalizeOverview(ov));
       }
 
       setLoading(false);
@@ -272,80 +292,38 @@ export default function LpdataVisualization() {
     filters.sort_by,
     filters.sort_dir,
     filters.page,
-    filters.limit,
+    filters.search,
   ]);
 
-  const filteredParcels = useMemo(
-    () => filterParcels(parcels, { search: filters.search }),
-    [parcels, filters.search]
-  );
-
+  // ✅ Ab `parcels` already server-filtered (50 rows ka current page) hote
+  // hain — koi client-side filterParcels() nahi chalana, woh sirf search
+  // box ko backend `search` param ke via already filter kar chuka hai.
   const geojson = useMemo(
-    () => parcelsToGeoJSON(filteredParcels),
-    [filteredParcels]
-  );
-
-  const summary = useMemo(
-    () => computeSummary(filteredParcels),
-    [filteredParcels]
-  );
-
-  const statusOptions = useMemo(
-    () => getUniqueValues(parcels, "status"),
-    [parcels]
-  );
-
-  const districtOptions = useMemo(
-    () => getDistrictsList(parcels),
-    [parcels]
-  );
-
-  const projectOptions = useMemo(
-    () => getProjects(parcels),
-    [parcels]
-  );
-
-  const villagesList = useMemo(
-    () => getVillagesList(parcels),
-    [parcels]
-  );
-
-  const statesList = useMemo(
-    () => getStatesList(parcels),
+    () => parcelsToGeoJSON(parcels),
     [parcels]
   );
 
   const farmerAggregation = useMemo(
-    () => aggregateByFarmer(filteredParcels),
-    [filteredParcels]
+    () => aggregateByFarmer(parcels),
+    [parcels]
   );
 
   const villageAggregation = useMemo(
-    () => aggregateByVillage(filteredParcels),
-    [filteredParcels]
+    () => aggregateByVillage(parcels),
+    [parcels]
   );
-
-  const totalProjectsCount = useMemo(() => {
-    if (summary.totalProjects != null && !isNaN(summary.totalProjects)) {
-      return summary.totalProjects;
-    }
-
-    if (summary.project != null && !isNaN(summary.project)) {
-      return summary.project;
-    }
-
-    return getProjects(filteredParcels).length;
-  }, [summary, filteredParcels]);
-
-  const setServerFilter = useCallback((key, value) => {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      dispatch({ type: "SET", key, value });
-    }, 400);
-  }, []);
 
   const setInstantFilter = useCallback((key, value) => {
     dispatch({ type: "SET", key, value });
+  }, []);
+
+  // Search box debounce — typing rukne ke 400ms baad hi server call jaayega
+  const handleSearchChange = useCallback((value) => {
+    setSearchInput(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      dispatch({ type: "SET", key: "search", value });
+    }, 400);
   }, []);
 
   const handleSort = useCallback((col) => {
@@ -357,6 +335,7 @@ export default function LpdataVisualization() {
   }, [filters.sort_by, filters.sort_dir]);
 
   const clearFilters = useCallback(() => {
+    setSearchInput("");
     dispatch({ type: "CLEAR" });
   }, []);
 
@@ -401,7 +380,6 @@ export default function LpdataVisualization() {
     if (k === "sort_by") return filters[k] !== "created_at";
     if (k === "sort_dir") return filters[k] !== "DESC";
     if (k === "page") return false;
-    if (k === "limit") return filters[k] !== 0;
     return filters[k] !== "";
   });
 
@@ -440,9 +418,11 @@ export default function LpdataVisualization() {
     );
   }
 
-  const totalParcelValue = filters.search
-    ? filteredParcels.length
-    : pagination?.total ?? summary.totalParcels;
+  // ── KPI cards: hamesha backend ke `overview` se (current filters ke according) ──
+  const kpi = overview || {
+    totalParcels: 0, totalHectares: 0, totalFarmers: 0,
+    totalDistricts: 0, totalProjects: 0,
+  };
 
   return (
     <div className="lp-root">
@@ -460,35 +440,35 @@ export default function LpdataVisualization() {
             {[
               {
                 label: "Total Parcels",
-                value: totalParcelValue,
+                value: kpi.totalParcels,
                 icon: "🗺️",
                 decimals: 0,
                 suffix: "",
               },
               {
                 label: "Total Area",
-                value: Number(summary.totalHectares || 0),
+                value: Number(kpi.totalHectares || 0),
                 icon: "📐",
                 decimals: 2,
                 suffix: " ha",
               },
               {
                 label: "Total Farmers",
-                value: summary.totalFarmers,
+                value: kpi.totalFarmers,
                 icon: "👨‍🌾",
                 decimals: 0,
                 suffix: "",
               },
               {
                 label: "Districts",
-                value: summary.totalDistricts,
+                value: kpi.totalDistricts,
                 icon: "📍",
                 decimals: 0,
                 suffix: "",
               },
               {
                 label: "Projects",
-                value: totalProjectsCount,
+                value: kpi.totalProjects,
                 icon: "📂",
                 decimals: 0,
                 suffix: "",
@@ -537,7 +517,7 @@ export default function LpdataVisualization() {
                 onChange={(e) => setInstantFilter("project_code", e.target.value)}
               >
                 <option value="">All Projects</option>
-                {projectOptions.map((p) => (
+                {filterOptions.project_codes.map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
@@ -551,7 +531,7 @@ export default function LpdataVisualization() {
                 onChange={(e) => setInstantFilter("state", e.target.value)}
               >
                 <option value="">All States</option>
-                {statesList.map((s) => (
+                {filterOptions.states.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
@@ -565,7 +545,7 @@ export default function LpdataVisualization() {
                 onChange={(e) => setInstantFilter("district", e.target.value)}
               >
                 <option value="">All Districts</option>
-                {districtOptions.map((d) => (
+                {filterOptions.districts.map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -579,7 +559,7 @@ export default function LpdataVisualization() {
                 onChange={(e) => setInstantFilter("village", e.target.value)}
               >
                 <option value="">All Villages</option>
-                {villagesList.map((v) => (
+                {filterOptions.villages.map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
@@ -590,12 +570,8 @@ export default function LpdataVisualization() {
               <input
                 type="text"
                 placeholder="Search farmer, ID, plot..."
-                value={filters.search}
-                onChange={(e) => dispatch({
-                  type: "SET",
-                  key: "search",
-                  value: e.target.value,
-                })}
+                value={searchInput}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="header-search-input"
               />
             </div>
@@ -677,13 +653,13 @@ export default function LpdataVisualization() {
                   </thead>
 
                   <tbody>
-                    {filteredParcels.length === 0 ? (
+                    {parcels.length === 0 ? (
                       <tr>
                         <td colSpan={11} className="lp-table-empty">
                           No parcels found
                         </td>
                       </tr>
-                    ) : filteredParcels.map((parcel, idx) => {
+                    ) : parcels.map((parcel, idx) => {
                       const id = parcel.id || parcel.parcel_id;
                       const selected = id === selectedId;
 
@@ -694,9 +670,7 @@ export default function LpdataVisualization() {
                           onClick={() => handleRowClick(parcel)}
                         >
                           <td className="lp-cell-idx">
-                            {filters.limit === 0
-                              ? idx + 1
-                              : (filters.page - 1) * filters.limit + idx + 1}
+                            {(filters.page - 1) * PAGE_SIZE + idx + 1}
                           </td>
                           <td className="lp-cell-mono">{shortId(id)}</td>
                           <td className="lp-cell-mono">{parcel.project_code || "—"}</td>
@@ -828,40 +802,15 @@ export default function LpdataVisualization() {
               )}
             </div>
 
+            {/* PAGINATION — strict 50/page, server-driven */}
             {activeTab === "parcels" && pagination && (
               <div className="lp-pagination">
                 <div className="lp-pagination-info">
                   Showing&nbsp;
-                  <strong>
-                    {filters.limit === 0 ? 1 : (filters.page - 1) * filters.limit + 1}
-                  </strong>
+                  <strong>{(filters.page - 1) * PAGE_SIZE + 1}</strong>
                   &nbsp;–&nbsp;
-                  <strong>
-                    {filters.limit === 0
-                      ? pagination.total
-                      : Math.min(filters.page * filters.limit, pagination.total)}
-                  </strong>
+                  <strong>{Math.min(filters.page * PAGE_SIZE, pagination.total)}</strong>
                   &nbsp;of&nbsp;<strong>{pagination.total}</strong>
-                </div>
-
-                <div className="lp-page-size">
-                  <span>Rows:</span>
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      className={`lp-page-size-btn ${filters.limit === n ? "lp-page-size-active" : ""}`}
-                      onClick={() => dispatch({ type: "SET_LIMIT", value: n })}
-                    >
-                      {n}
-                    </button>
-                  ))}
-
-                  <button
-                    className={`lp-page-size-btn ${filters.limit === 0 ? "lp-page-size-active" : ""}`}
-                    onClick={() => dispatch({ type: "SET_LIMIT", value: 0 })}
-                  >
-                    All
-                  </button>
                 </div>
 
                 <div className="lp-page-controls">

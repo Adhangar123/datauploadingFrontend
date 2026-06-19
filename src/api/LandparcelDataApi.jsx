@@ -1,5 +1,6 @@
 // LandparcelDataApi.js
-// Aligned with backend: bulk upsert + server-side filtering, sorting, pagination
+// Aligned with backend: bulk upsert + server-side filtering, sorting, FIXED pagination (50/page)
+// + server-computed overview stats (total parcels, area, farmers, districts, projects)
 
 const BASE_URL =
   "https://datauploadingbackend-13977221722.asia-south2.run.app/api/v1";
@@ -77,21 +78,28 @@ export const uploadLandParcelData = async (parcelRows) => {
 
 /* ──────────────────────────────────────────────────────────────
    BUILD QUERY STRING from filter/sort/pagination params
+   ⚠️ "limit" hata diya gaya hai — backend ab FIXED 50/page deta hai,
+      isko client se override nahi kiya ja sakta.
+   ✅ "search" add kiya gaya hai — farmer_name + parcel_id + plot_num
+      teeno me ek saath search karta hai (backend handles it).
 ────────────────────────────────────────────────────────────── */
 export function buildQueryString(params = {}) {
   const q = new URLSearchParams();
 
-  if (params.parcel_id)  q.set("parcel_id",  params.parcel_id);
+  if (params.parcel_id)    q.set("parcel_id",    params.parcel_id);
   if (params.project_code) q.set("project_code", params.project_code);
-  if (params.farmer_id)  q.set("farmer_id",  params.farmer_id);
+  if (params.farmer_id)    q.set("farmer_id",    params.farmer_id);
 
   if (params.project_codes?.length) q.set("project_codes", params.project_codes.join(","));
-  if (params.farmer_ids?.length)  q.set("farmer_ids",  params.farmer_ids.join(","));
+  if (params.farmer_ids?.length)    q.set("farmer_ids",    params.farmer_ids.join(","));
 
   if (params.farmer_name) q.set("farmer_name", params.farmer_name);
-  if (params.state)        q.set("state",        params.state);
-  if (params.district)     q.set("district",     params.district);
-  if (params.village)      q.set("village",      params.village);
+  if (params.state)       q.set("state",       params.state);
+  if (params.district)    q.set("district",    params.district);
+  if (params.village)     q.set("village",     params.village);
+
+  // ✅ NEW — global search box (farmer_name + parcel_id + plot_num, backend-side)
+  if (params.search) q.set("search", params.search);
 
   if (params.is_active !== undefined && params.is_active !== "")
     q.set("is_active", String(params.is_active));
@@ -106,8 +114,9 @@ export function buildQueryString(params = {}) {
   if (params.updated_from) q.set("updated_from", params.updated_from);
   if (params.updated_to)   q.set("updated_to",   params.updated_to);
 
-  q.set("page",  String(params.page  ?? 1));
-  q.set("limit", String(params.limit ?? 0));
+  // ✅ sirf "page" jaata hai — backend khud 50/page fixed rakhta hai.
+  //    "limit" ab bheja hi nahi jaata, backend use ignore kar dega agar bheja bhi.
+  q.set("page", String(params.page ?? 1));
 
   if (params.sort_by)  q.set("sort_by",  params.sort_by);
   if (params.sort_dir) q.set("sort_dir", params.sort_dir);
@@ -116,7 +125,10 @@ export function buildQueryString(params = {}) {
 }
 
 /* ──────────────────────────────────────────────────────────────
-   FETCH LAND PARCELS  (server-side filters + pagination)
+   FETCH LAND PARCELS  (server-side filters + FIXED 50/page pagination)
+   ✅ NOW returns `overview` too — backend ke combined KPI stats
+      (total_parcels, total_area_ha, total_farmers, total_districts,
+       total_projects), jo current filters ke according hote hain.
 ────────────────────────────────────────────────────────────── */
 export async function fetchLandParcels(params = {}) {
   try {
@@ -149,8 +161,8 @@ export async function fetchLandParcels(params = {}) {
     console.log("Land Parcel API Response:", json);
 
     let parcels = [];
-    if (Array.isArray(json))            parcels = json;
-    else if (Array.isArray(json.data))  parcels = json.data;
+    if (Array.isArray(json))              parcels = json;
+    else if (Array.isArray(json.data))    parcels = json.data;
     else if (Array.isArray(json.parcels)) parcels = json.parcels;
     else if (Array.isArray(json.results)) parcels = json.results;
     else if (json.parcel_id || json.geom) parcels = [json];
@@ -158,11 +170,87 @@ export async function fetchLandParcels(params = {}) {
     return {
       data:       parcels.map(normalizeParcel),
       pagination: json.pagination ?? null,
-      error:      null,
+      // ✅ NEW — backend-computed overview stats (filtered, not just current page)
+      overview: json.overview ?? null,
+      error:    null,
     };
   } catch (err) {
     console.error("[LandparcelDataApi] fetchLandParcels error:", err);
-    return { data: [], pagination: null, error: err.message || "Failed to fetch land parcels" };
+    return {
+      data:       [],
+      pagination: null,
+      overview:   null,
+      error:      err.message || "Failed to fetch land parcels",
+    };
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   FETCH FILTER OPTIONS  (poore dataset se distinct dropdown values)
+   ✅ NEW — Project / State / District / Village dropdowns ke liye
+      SAARE possible values laata hai, na ki sirf current 50 rows se.
+   Optional: agar ek dropdown doosre se narrow karna ho (e.g. state
+   select karne par districts sirf usi state ke aaye), woh params
+   bhej do — backend WHERE reuse kar lega.
+────────────────────────────────────────────────────────────── */
+export async function fetchFilterOptions(params = {}) {
+  try {
+    const token = getAuthToken();
+    if (!token) throw new Error("Authentication token not found");
+
+    // Sirf woh filters jo backend ka WHERE samajhta hai (page/sort/limit nahi chahiye)
+    const qs = buildQueryString({
+      project_code: params.project_code,
+      farmer_id: params.farmer_id,
+      project_codes: params.project_codes,
+      farmer_ids: params.farmer_ids,
+      farmer_name: params.farmer_name,
+      state: params.state,
+      district: params.district,
+      village: params.village,
+      search: params.search,
+      is_active: params.is_active,
+      area_ha_min: params.area_ha_min,
+      area_ha_max: params.area_ha_max,
+      created_from: params.created_from,
+      created_to: params.created_to,
+      updated_from: params.updated_from,
+      updated_to: params.updated_to,
+    });
+
+    const url = `${BASE_URL}/land-parcel/filter-options${qs ? `?${qs}` : ""}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      clearAuthToken();
+      throw new Error("Session expired. Please login again.");
+    }
+
+    if (!response.ok) {
+      let errBody = {};
+      try { errBody = await response.json(); } catch (_) {}
+      throw new Error(errBody.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const json = await response.json();
+
+    return {
+      options: json.options ?? { project_codes: [], states: [], districts: [], villages: [] },
+      error: null,
+    };
+  } catch (err) {
+    console.error("[LandparcelDataApi] fetchFilterOptions error:", err);
+    return {
+      options: { project_codes: [], states: [], districts: [], villages: [] },
+      error: err.message || "Failed to fetch filter options",
+    };
   }
 }
 
@@ -216,7 +304,29 @@ export function normalizeParcel(parcel) {
 }
 
 /* ──────────────────────────────────────────────────────────────
-   SUMMARY (client-side from currently loaded page)
+   NORMALIZE OVERVIEW  (backend → KPI-card-ready shape)
+   ✅ NEW — backend ke `overview` block ko UI ke Overview cards
+      (Total Parcels, Total Area, Total Farmers, Districts, Projects)
+      ke naming convention se map karta hai.
+────────────────────────────────────────────────────────────── */
+export function normalizeOverview(overview) {
+  if (!overview) return null;
+  return {
+    totalParcels:   overview.total_parcels   ?? 0,
+    totalHectares:  overview.total_area_ha   ?? 0,
+    totalFarmers:   overview.total_farmers   ?? 0,
+    totalDistricts: overview.total_districts ?? 0,
+    totalProjects:  overview.total_projects  ?? 0,
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SUMMARY (client-side fallback — sirf current page se)
+   ⚠️ DEPRECATED for the Overview cards: backend ka `overview` block
+      (normalizeOverview se) ab saari filtered rows ke according hota
+      hai, na ki sirf abhi load hui 50 rows ke. Naye code me KPI cards
+      ke liye is function ko mat use karo — sirf legacy/offline fallback
+      ke liye rakha hai jahan overview na mila ho.
 ────────────────────────────────────────────────────────────── */
 export function computeSummary(parcels = []) {
   const totalParcels   = parcels.length;
@@ -278,6 +388,8 @@ export function parcelsToGeoJSON(parcels = []) {
 
 /* ──────────────────────────────────────────────────────────────
    CLIENT-SIDE FILTER (for already-loaded data — instant search)
+   ⚠️ Sirf current page (50 rows) par chalta hai, server-side `search`
+      param ki jagah nahi leta — woh poore filtered dataset par chalta hai.
 ────────────────────────────────────────────────────────────── */
 export function filterParcels(parcels = [], filters = {}) {
   const {
@@ -308,6 +420,11 @@ export function filterParcels(parcels = [], filters = {}) {
 
 /* ──────────────────────────────────────────────────────────────
    HELPERS — unique value lists
+   ⚠️ Sirf current page (50 rows) ke andar se nikalte hain. Agar filter
+      dropdowns (Project / State / District / Village) ke liye SAARE
+      possible values chahiye (poore dataset se), backend par alag
+      "/land-parcel/filter-options" jaisa endpoint banana behtar hoga —
+      yeh helpers sirf already-loaded data ke liye hain.
 ────────────────────────────────────────────────────────────── */
 export function getUniqueValues(parcels = [], fieldKey) {
   return [...new Set(parcels.map(p => p[fieldKey]).filter(Boolean))].sort();
