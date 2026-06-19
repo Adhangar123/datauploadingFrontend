@@ -11,7 +11,7 @@ const PROJECT_CODE_MAP = {
   "nbs-006": "FCF050",
   "nbs-007": "FCF053",
   "nbs-008": "FCF057",
-  "nbs-009": "FCF053",
+  "nbs-009": "FCF052",
 };
 
 const OldLandparcel = () => {
