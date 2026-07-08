@@ -211,6 +211,16 @@ export default function LpdataVisualization() {
   const [activeTab, setActiveTab] = useState("parcels");
   const [filters, dispatch] = useReducer(filterReducer, FILTER_INIT);
 
+  // 🔧 FIX — bumped every time a fresh server response lands. react-leaflet's
+  // <GeoJSON> layer is only built ONCE from its initial `data` prop; later
+  // changes to `data` are NOT re-rendered into the Leaflet layer on their own.
+  // That's why the map camera (FitBounds/HighlightFeature, which recompute
+  // bounds straight from the `geojson` object) used to move to the right
+  // place while the polygons drawn stayed stale. Keying <GeoJSON> off this
+  // counter forces React to unmount + remount the layer with the new data
+  // whenever a fetch actually completes.
+  const [dataVersion, setDataVersion] = useState(0);
+
   // Search box ka raw text — debounce hone tak isi se input control hota hai
   const [searchInput, setSearchInput] = useState("");
 
@@ -272,6 +282,8 @@ export default function LpdataVisualization() {
         setPagination(pg);
         // ✅ overview backend se seedha aata hai — current filters ke according
         setOverview(normalizeOverview(ov));
+        // 🔧 FIX — naya data aaya hai, GeoJSON layer ko force-remount karo
+        setDataVersion((v) => v + 1);
       }
 
       setLoading(false);
@@ -892,7 +904,15 @@ export default function LpdataVisualization() {
                   attribution={MAP_TILES[mapStyle].attribution}
                 />
 
+                {/* 🔧 FIX — `key={dataVersion}` forces React to unmount +
+                    remount this layer whenever fresh parcel data arrives from
+                    the server, so the drawn polygons always match the current
+                    filters instead of showing stale shapes from the first
+                    mount. Do NOT key this off `selectedId` or `mapStyle` —
+                    that would cause unwanted full remounts on every row click
+                    or tile switch. */}
                 <GeoJSON
+                  key={dataVersion}
                   ref={geoJsonLayerRef}
                   data={geojson}
                   style={(feature) =>
