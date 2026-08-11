@@ -92,6 +92,13 @@ const SectionHeader = ({ icon, title, subtitle, badge }) => (
    FILTER STATE REDUCER
    ⚠️ "limit" hata diya — backend fixed 50/page deta hai, isko
       override karne ka koi tareeka nahi hai ab.
+
+   ✅ CASCADING FILTERS — hierarchy hai: Project → State → District → Village.
+      Jab koi upar wala filter (parent) badalta hai, uske neeche wale saare
+      filters (children) auto-clear ho jaate hain, kyunki purana selected
+      value naye parent ke andar valid na ho. Isliye "SET_CASCADE" action
+      alag se rakha hai — normal "SET" (jaise farmer_name, is_active, area
+      range) is cascading behaviour ko trigger nahi karta.
 ───────────────────────────────────────────── */
 const FILTER_INIT = {
   farmer_name: "",
@@ -114,6 +121,27 @@ function filterReducer(state, action) {
   switch (action.type) {
     case "SET":
       return { ...state, [action.key]: action.value, page: 1 };
+
+    // ✅ project_code badalne par → state, district, village clear
+    //    state badalne par         → district, village clear
+    //    district badalne par      → village clear
+    case "SET_CASCADE": {
+      const updates = { [action.key]: action.value, page: 1 };
+
+      if (action.key === "project_code") {
+        updates.state = "";
+        updates.district = "";
+        updates.village = "";
+      } else if (action.key === "state") {
+        updates.district = "";
+        updates.village = "";
+      } else if (action.key === "district") {
+        updates.village = "";
+      }
+
+      return { ...state, ...updates };
+    }
+
     case "SET_PAGE":
       return { ...state, page: action.value };
     case "SORT":
@@ -373,8 +401,9 @@ export default function LpdataVisualization() {
   // ✅ backend ke `overview` block se aane wale filtered KPI totals
   // (sirf currently-loaded 50 rows se nahi, balki SAARE filtered rows se)
   const [overview, setOverview] = useState(null);
-  // ✅ poore dataset se distinct dropdown values (Project/State/District/Village)
-  // current page ke 50 rows se nahi.
+  // ✅ CASCADING dropdown values: project_code par depend karke states,
+  // state par depend karke districts, district par depend karke villages
+  // — poore dataset se, current page ke 50 rows se nahi.
   const [filterOptions, setFilterOptions] = useState({
     project_codes: [], states: [], districts: [], villages: [],
   });
@@ -400,14 +429,47 @@ export default function LpdataVisualization() {
     if (!token) navigate("/login");
   }, [token, navigate]);
 
-  // ✅ dropdown options ek baar load hote hain (poora dataset se), page
-  // ya pagination se independent. Yeh sirf tab refresh hote hain jab token badle.
+  // ✅ CASCADING FILTER OPTIONS — HAR dropdown sirf apne UPAR (parent) wale
+  // filters se scope hota hai, apne NEECHE (child) wale filters se nahi.
+  // Isiliye 4 alag calls: agar sab teen (project/state/district) ek hi
+  // WHERE me bhej dete, to State select karte hi Project ki list bhi
+  // usi State tak simit ho jaati — matlab kisi doosre Project pe jaane
+  // ke liye pehle State ko "All" karna padta. Ab aisa nahi hoga:
+  //
+  //   - Project list  → kisi se bhi affected nahi (sabse top level, always full)
+  //   - State list    → sirf project_code se scoped
+  //   - District list → project_code + state se scoped
+  //   - Village list  → project_code + state + district se scoped
+  //
+  // Matlab ab kisi bhi dropdown me DIRECT dusra option select kar sakte ho,
+  // "All" pe wapas jaane ki zarurat nahi (jab tak wo option us upar-wale
+  // scope me genuinely exist na kare — tab hi list me nahi dikhega, jo sahi hai).
   useEffect(() => {
     if (!token) return;
-    fetchFilterOptions().then(({ options, error: err }) => {
-      if (!err) setFilterOptions(options);
+
+    const { project_code, state, district } = filters;
+
+    Promise.all([
+      fetchFilterOptions({}), // Project → hamesha full list
+      fetchFilterOptions({ project_code: project_code || undefined }), // State → project se scoped
+      fetchFilterOptions({
+        project_code: project_code || undefined,
+        state: state || undefined,
+      }), // District → project + state se scoped
+      fetchFilterOptions({
+        project_code: project_code || undefined,
+        state: state || undefined,
+        district: district || undefined,
+      }), // Village → project + state + district se scoped
+    ]).then(([projectRes, stateRes, districtRes, villageRes]) => {
+      setFilterOptions({
+        project_codes: projectRes.error ? [] : projectRes.options.project_codes,
+        states: stateRes.error ? [] : stateRes.options.states,
+        districts: districtRes.error ? [] : districtRes.options.districts,
+        villages: villageRes.error ? [] : villageRes.options.villages,
+      });
     });
-  }, [token]);
+  }, [token, filters.project_code, filters.state, filters.district]);
 
   useEffect(() => {
     if (!token) return;
@@ -496,6 +558,12 @@ export default function LpdataVisualization() {
 
   const setInstantFilter = useCallback((key, value) => {
     dispatch({ type: "SET", key, value });
+  }, []);
+
+  // ✅ Project / State / District / Village dropdowns isi se change karo —
+  // ye neeche wale (child) filters ko auto-reset kar deta hai (see reducer).
+  const setCascadeFilter = useCallback((key, value) => {
+    dispatch({ type: "SET_CASCADE", key, value });
   }, []);
 
   // Search box debounce — typing rukne ke 400ms baad hi server call jaayega
@@ -682,7 +750,7 @@ export default function LpdataVisualization() {
               <select
                 className="filter-select"
                 value={filters.project_code}
-                onChange={(e) => setInstantFilter("project_code", e.target.value)}
+                onChange={(e) => setCascadeFilter("project_code", e.target.value)}
               >
                 <option value="">All Projects</option>
                 {filterOptions.project_codes.map((p) => (
@@ -696,7 +764,7 @@ export default function LpdataVisualization() {
               <select
                 className="filter-select"
                 value={filters.state}
-                onChange={(e) => setInstantFilter("state", e.target.value)}
+                onChange={(e) => setCascadeFilter("state", e.target.value)}
               >
                 <option value="">All States</option>
                 {filterOptions.states.map((s) => (
@@ -710,7 +778,7 @@ export default function LpdataVisualization() {
               <select
                 className="filter-select"
                 value={filters.district}
-                onChange={(e) => setInstantFilter("district", e.target.value)}
+                onChange={(e) => setCascadeFilter("district", e.target.value)}
               >
                 <option value="">All Districts</option>
                 {filterOptions.districts.map((d) => (
