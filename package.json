@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
     "@tmcw/togeojson": "^7.1.2",
     "adm-zip": "^0.5.17",
     "axios": "^1.13.6",

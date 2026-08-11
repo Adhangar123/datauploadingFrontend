@@ -104,14 +104,19 @@ const farmerIdPattern = /^[A-Za-z0-9-_]+$/;
   const names = parseNames(row.farmer_name);
   if (!names.length) errors.push("farmer_name is required");
 
-  if (row.farmer_id && !farmerIdPattern.test(row.farmer_id.trim())) {
-    errors.push("farmer_id must be alphanumeric (letters, numbers, dash only)");
-  }
+  const farmerId = String(row.farmer_id ?? "").trim();
+
+if (farmerId && !farmerIdPattern.test(farmerId)) {
+  errors.push("farmer_id must be alphanumeric (letters, numbers, dash, underscore only)");
+}
 
   // 🔥 Allow same farmer_id, but prevent exact duplicate name
   const duplicate = existingRows.find((r) => {
-    if (r.farmer_id?.trim() !== row.farmer_id?.trim()) return false;
-
+if (
+  String(r.farmer_id ?? "").trim() !==
+  String(row.farmer_id ?? "").trim()
+)
+  return false;
     const existingNames = parseNames(r.farmer_name).map((n) =>
       n.toLowerCase()
     );
@@ -247,7 +252,7 @@ const FarmerDataUpload = () => {
         const check = validateRow(filtered, farmerIds);
 
         if (check.isValid) {
-          farmerIds.push(filtered.farmer_id?.trim());
+          farmerIds.push(String(filtered.farmer_id ?? "").trim());
           valid.push(filtered);
         } else {
           invalid.push({ ...filtered, __errors: check.errors });
