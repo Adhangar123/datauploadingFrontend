@@ -31,7 +31,7 @@
 /* Section card */
 .help-section {
   padding: 16px 18px;
-  background: rgba(87, 76, 76, 0.03);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
   border-radius: 12px;
   margin-bottom: 16px;
