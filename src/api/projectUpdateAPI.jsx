@@ -11,13 +11,25 @@ const getAuthHeaders = () => {
   };
 };
 
-// Fetch all projects
-export const fetchProjects = async (limit = 100) => {
+// Safe JSON parse: agar server HTML / empty response de to bhi crash nahi hoga
+const parseResponse = async (response) => {
+  let data;
   try {
-    const response = await fetch(`${API_BASE}?limit=${limit}`, {
+    data = await response.json();
+  } catch {
+    data = { success: false, message: `Unexpected server response (HTTP ${response.status}).` };
+  }
+  return { ok: response.ok, status: response.status, data };
+};
+
+// ─── GET all projects (paginated) ───────────────────────────────────────────
+// Backend max limit = 200
+export const fetchProjects = async (limit = 200, page = 1) => {
+  try {
+    const response = await fetch(`${API_BASE}?page=${page}&limit=${limit}`, {
       headers: getAuthHeaders(),
     });
-    const data = await response.json();
+    const { data } = await parseResponse(response);
     return data;
   } catch (error) {
     console.error("Fetch error:", error);
@@ -25,100 +37,66 @@ export const fetchProjects = async (limit = 100) => {
   }
 };
 
-// Create a new project
-export const createProject = async (projectData, userId) => {
+// ─── POST create project ────────────────────────────────────────────────────
+// NOTE: created_by / updated_by ab backend token (req.user.id) se leta hai,
+// isliye frontend se bhejna band kar diya.
+export const createProject = async (projectData) => {
   try {
-    const payload = {
-      ...projectData,
-      created_by: userId,
-      updated_by: userId,
-    };
-
     const response = await fetch(API_BASE, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(projectData),
     });
-    const data = await response.json();
-    return { ok: response.ok, data };
+    return await parseResponse(response);
   } catch (error) {
     console.error("Network error:", error);
     throw error;
   }
 };
 
-// Update an existing project
-export const updateProject = async (projectId, projectData, userId) => {
+// ─── PUT update project ─────────────────────────────────────────────────────
+export const updateProject = async (projectId, projectData) => {
   try {
-    const payload = {
-      ...projectData,
-      updated_by: userId,
-    };
-
-    const response = await fetch(`${API_BASE}/${projectId}`, {
+    const response = await fetch(`${API_BASE}/${encodeURIComponent(projectId)}`, {
       method: "PUT",
       headers: getAuthHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(projectData),
     });
-    const data = await response.json();
-    return { ok: response.ok, data };
+    return await parseResponse(response);
   } catch (error) {
     console.error("Network error:", error);
     throw error;
   }
 };
 
-// Fetch project history
-export const fetchProjectHistory = async (projectId, page = 1, limit = 200) => {
+// ─── DELETE project (soft by default, hard=true for permanent) ──────────────
+export const deleteProject = async (projectId, hard = false) => {
   try {
     const response = await fetch(
-      `${API_BASE}/${projectId}/history?page=${page}&limit=${limit}`,
+      `${API_BASE}/${encodeURIComponent(projectId)}?hard=${hard ? "true" : "false"}`,
+      {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      }
+    );
+    return await parseResponse(response);
+  } catch (error) {
+    console.error("Network error:", error);
+    throw error;
+  }
+};
+
+// ─── GET project history ────────────────────────────────────────────────────
+export const fetchProjectHistory = async (projectId, page = 1, limit = 50) => {
+  try {
+    const response = await fetch(
+      `${API_BASE}/${encodeURIComponent(projectId)}/history?page=${page}&limit=${limit}`,
       {
         method: "GET",
         headers: getAuthHeaders(),
       }
     );
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return { ok: true, data };
-  } catch (error) {
-    console.error("Fetch history error:", error);
-    throw error;
-  }
-};
-
-// Fetch project history with pagination and filtering options
-export const fetchProjectHistoryAdvanced = async (projectId, options = {}) => {
-  const {
-    page = 1,
-    limit = 200,
-    startDate = null,
-    endDate = null,
-    userId = null
-  } = options;
-
-  try {
-    let url = `${API_BASE}/${projectId}/history?page=${page}&limit=${limit}`;
-    
-    if (startDate) url += `&startDate=${startDate}`;
-    if (endDate) url += `&endDate=${endDate}`;
-    if (userId) url += `&userId=${userId}`;
-    
-    const response = await fetch(url, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return { ok: true, data };
+    return await parseResponse(response);
   } catch (error) {
     console.error("Fetch history error:", error);
     throw error;
